@@ -6,5 +6,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM scratch
-COPY --from=builder /app/dist /headlamp/plugins/mirops/
+# busybox (not scratch) so an initContainer can `cp` the plugin into
+# Headlamp's shared plugins volume when deployed in-cluster.
+FROM busybox:1.37.0
+COPY --from=builder /app/dist /plugins/mirops/
