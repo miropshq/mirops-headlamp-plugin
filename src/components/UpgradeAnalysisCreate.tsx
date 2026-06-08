@@ -1,5 +1,5 @@
 import { Icon } from '@iconify/react';
-import { K8s } from '@kinvolk/headlamp-plugin/lib';
+import { K8s, Router } from '@kinvolk/headlamp-plugin/lib';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
@@ -169,7 +169,12 @@ export function UpgradeAnalysisCreate() {
     try {
       const cr = buildCR(form);
       await UpgradeAnalysis.apiEndpoint.post(cr);
-      history.push(`/mirops/upgrade-analyses/${form.namespace}/${form.name}`);
+      history.push(
+        Router.createRouteURL('upgradeAnalysisDetail', {
+          namespace: form.namespace,
+          name: form.name,
+        })
+      );
     } catch (err: any) {
       setError(err?.message ?? String(err));
     } finally {

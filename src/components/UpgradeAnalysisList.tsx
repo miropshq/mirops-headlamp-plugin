@@ -1,4 +1,5 @@
 import { Icon } from '@iconify/react';
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import { Link, ResourceListView } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Button from '@mui/material/Button';
 import React from 'react';
@@ -20,7 +21,7 @@ export function UpgradeAnalysisList() {
             variant="contained"
             size="small"
             startIcon={<Icon icon="mdi:plus" />}
-            onClick={() => history.push('/mirops/upgrade-analyses/create')}
+            onClick={() => history.push(Router.createRouteURL('upgradeAnalysisCreate'))}
           >
             Nuevo análisis
           </Button>,
