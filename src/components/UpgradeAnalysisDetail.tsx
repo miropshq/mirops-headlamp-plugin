@@ -81,7 +81,7 @@ export function UpgradeAnalysisDetail() {
     // reachable from the browser directly. Route the request through the
     // Kubernetes API server service proxy via Headlamp's backend.
     const path =
-      `/api/v1/namespaces/${namespace}/services/mirops-operator-reports:8084` +
+      `/api/v1/namespaces/${namespace}/services/mirops-reports:8084` +
       `/proxy/reports/${name}.json`;
     ApiProxy.request(path)
       .then((data: Report) => setReport(data))
