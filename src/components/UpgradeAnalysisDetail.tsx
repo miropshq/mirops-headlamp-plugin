@@ -1,9 +1,5 @@
-import {
-  ConditionsTable,
-  Link,
-  SectionBox,
-} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { K8s } from '@kinvolk/headlamp-plugin/lib/K8s';
+import { ApiProxy } from '@kinvolk/headlamp-plugin/lib';
+import { Link, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -19,7 +15,7 @@ import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UPGRADE_ANALYSIS_RESOURCE } from '../resources';
+import { UpgradeAnalysis } from '../resources';
 import { Report } from '../types';
 import { DecisionChip } from './DecisionChip';
 import { ScoreGauge } from './ScoreGauge';
@@ -71,7 +67,7 @@ function WorkloadTable({
 
 export function UpgradeAnalysisDetail() {
   const { namespace, name } = useParams<{ namespace: string; name: string }>();
-  const [item, error] = K8s.useGet(UPGRADE_ANALYSIS_RESOURCE, name, namespace);
+  const [item, error] = UpgradeAnalysis.useGet(name, namespace);
   const [report, setReport] = useState<Report | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -81,12 +77,13 @@ export function UpgradeAnalysisDetail() {
     setReportLoading(true);
     setReportError(null);
 
-    const url = `http://mirops-operator-reports.${namespace}.svc:8084/reports/${name}.json`;
-    fetch(url)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    // The operator serves reports from an in-cluster service that is not
+    // reachable from the browser directly. Route the request through the
+    // Kubernetes API server service proxy via Headlamp's backend.
+    const path =
+      `/api/v1/namespaces/${namespace}/services/mirops-operator-reports:8084` +
+      `/proxy/reports/${name}.json`;
+    ApiProxy.request(path)
       .then((data: Report) => setReport(data))
       .catch(e => setReportError(e.message))
       .finally(() => setReportLoading(false));
@@ -98,7 +95,6 @@ export function UpgradeAnalysisDetail() {
   const status = item.status ?? {};
   const decision = status.decision ?? 'WARNING';
   const score = status.totalScore ?? 0;
-
   const remediationRef = item.metadata?.annotations?.['mirops.io/remediation-plan'];
 
   return (
@@ -139,7 +135,28 @@ export function UpgradeAnalysisDetail() {
         )}
 
         {/* Conditions */}
-        <ConditionsTable resource={item} />
+        {status.conditions && status.conditions.length > 0 && (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Type</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Reason</TableCell>
+                <TableCell>Message</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {status.conditions.map(c => (
+                <TableRow key={c.type}>
+                  <TableCell>{c.type}</TableCell>
+                  <TableCell>{c.status}</TableCell>
+                  <TableCell>{c.reason ?? '-'}</TableCell>
+                  <TableCell>{c.message ?? '-'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </SectionBox>
 
       {/* Report section */}

@@ -1,7 +1,4 @@
-import {
-  registerRoute,
-  registerSidebarEntry,
-} from '@kinvolk/headlamp-plugin/lib/K8s';
+import { registerRoute, registerSidebarEntry } from '@kinvolk/headlamp-plugin/lib';
 import React from 'react';
 import { RemediationPlanDetail } from './components/RemediationPlanDetail';
 import { UpgradeAnalysisCreate } from './components/UpgradeAnalysisCreate';
@@ -10,7 +7,7 @@ import { UpgradeAnalysisList } from './components/UpgradeAnalysisList';
 
 // Sidebar: mirops section
 registerSidebarEntry({
-  parent: null,
+  parent: '',
   name: 'mirops',
   label: 'Mirops',
   icon: 'mdi:arrow-up-circle-outline',
