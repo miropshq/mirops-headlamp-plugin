@@ -1,4 +1,4 @@
-name: Mirops UI – Headlamp Plugin for Mirops Operator – Development (lint, build, push :dev)
+name: CI - Development (lint, build, push :dev)
 
 on:
   push:

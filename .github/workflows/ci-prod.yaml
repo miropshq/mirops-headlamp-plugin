@@ -1,4 +1,4 @@
-name: CI - Production (lint, build, semantic-release, push :vX.Y.Z)
+name: Mirops UI – Headlamp Plugin for Mirops Operator – Release (lint, build, semantic-release, push :vX.Y.Z)
 
 on:
   push:
