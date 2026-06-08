@@ -1,7 +1,5 @@
+import { Icon } from '@iconify/react';
 import { K8s } from '@kinvolk/headlamp-plugin/lib';
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
@@ -227,7 +225,7 @@ export function UpgradeAnalysisCreate() {
 
         {/* ── Scope ── */}
         <Accordion defaultExpanded>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <AccordionSummary expandIcon={<Icon icon="mdi:chevron-down" />}>
             <Typography fontWeight={600}>Scope</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -256,7 +254,7 @@ export function UpgradeAnalysisCreate() {
                   onChange={e => setNewNs(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addNamespace())}
                 />
-                <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={addNamespace}>
+                <Button variant="outlined" size="small" startIcon={<Icon icon="mdi:plus" />} onClick={addNamespace}>
                   Agregar
                 </Button>
               </Box>
@@ -271,7 +269,7 @@ export function UpgradeAnalysisCreate() {
                   >
                     <Typography variant="caption">{ns}</Typography>
                     <IconButton size="small" onClick={() => removeNamespace(ns)}>
-                      <DeleteIcon fontSize="inherit" />
+                      <Icon icon="mdi:delete" />
                     </IconButton>
                   </Box>
                 ))}
@@ -282,7 +280,7 @@ export function UpgradeAnalysisCreate() {
 
         {/* ── AI ── */}
         <Accordion>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <AccordionSummary expandIcon={<Icon icon="mdi:chevron-down" />}>
             <Typography fontWeight={600}>AI Scoring</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -372,7 +370,7 @@ export function UpgradeAnalysisCreate() {
 
         {/* ── Resync ── */}
         <Accordion>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <AccordionSummary expandIcon={<Icon icon="mdi:chevron-down" />}>
             <Typography fontWeight={600}>Resync (opcional)</Typography>
           </AccordionSummary>
           <AccordionDetails>
@@ -389,7 +387,7 @@ export function UpgradeAnalysisCreate() {
 
         {/* ── Source ── */}
         <Accordion>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <AccordionSummary expandIcon={<Icon icon="mdi:chevron-down" />}>
             <Typography fontWeight={600}>Source — destino del reporte (avanzado)</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
