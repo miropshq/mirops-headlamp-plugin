@@ -1,4 +1,4 @@
-import { K8s } from '@kinvolk/headlamp-plugin/lib/K8s';
+import { K8s } from '@kinvolk/headlamp-plugin/lib';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -26,7 +26,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import React, { useState } from 'react';
 import { useHistory } from 'react-router-dom';
-import { UPGRADE_ANALYSIS_RESOURCE } from '../resources';
+import { UpgradeAnalysis } from '../resources';
 
 interface FormState {
   name: string;
@@ -145,10 +145,7 @@ export function UpgradeAnalysisCreate() {
   const [newNs, setNewNs] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [namespaces] = K8s.ResourceClasses.Namespace
-    ? // eslint-disable-next-line react-hooks/rules-of-hooks
-      K8s.useList(K8s.ResourceClasses.Namespace)
-    : [[], null];
+  const [namespaces] = K8s.ResourceClasses.Namespace.useList();
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -173,8 +170,7 @@ export function UpgradeAnalysisCreate() {
     setError(null);
     try {
       const cr = buildCR(form);
-      const instance = new UPGRADE_ANALYSIS_RESOURCE(cr);
-      await instance.create();
+      await UpgradeAnalysis.apiEndpoint.post(cr);
       history.push(`/mirops/upgrade-analyses/${form.namespace}/${form.name}`);
     } catch (err: any) {
       setError(err?.message ?? String(err));

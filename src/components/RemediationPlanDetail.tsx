@@ -1,5 +1,4 @@
 import { SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { K8s } from '@kinvolk/headlamp-plugin/lib/K8s';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -14,8 +13,8 @@ import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { REMEDIATION_PLAN_RESOURCE } from '../resources';
-import { RemediationAction, RemediationPhase } from '../types';
+import { RemediationPlan } from '../resources';
+import { ActionResult, RemediationAction, RemediationPhase } from '../types';
 import { RiskChip } from './RiskChip';
 
 const PHASE_COLOR: Record<RemediationPhase, 'default' | 'warning' | 'info' | 'success' | 'error'> = {
@@ -27,7 +26,7 @@ const PHASE_COLOR: Record<RemediationPhase, 'default' | 'warning' | 'info' | 'su
 
 export function RemediationPlanDetail() {
   const { namespace, name } = useParams<{ namespace: string; name: string }>();
-  const [item, error] = K8s.useGet(REMEDIATION_PLAN_RESOURCE, name, namespace);
+  const [item, error] = RemediationPlan.useGet(name, namespace);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [patching, setPatching] = useState(false);
   const [patchError, setPatchError] = useState<string | null>(null);
@@ -37,7 +36,7 @@ export function RemediationPlanDetail() {
 
   const actions: RemediationAction[] = item.spec?.actions ?? [];
   const phase: RemediationPhase = item.status?.phase ?? 'pending-approval';
-  const results: any[] = item.status?.results ?? [];
+  const results: ActionResult[] = item.status?.results ?? [];
   const approved: boolean = item.spec?.approved ?? false;
   const isExecutable = !approved && (phase === 'pending-approval');
 
@@ -51,14 +50,12 @@ export function RemediationPlanDetail() {
   }
 
   async function patch(skipSet: Set<string>, approve: boolean) {
+    if (!item) return;
     setPatching(true);
     setPatchError(null);
     try {
       const patchedActions = actions.map(a => ({ ...a, skip: skipSet.has(a.id) }));
-      await item.patch([
-        { op: 'replace', path: '/spec/actions', value: patchedActions },
-        { op: 'replace', path: '/spec/approved', value: approve },
-      ]);
+      await item.patch({ spec: { actions: patchedActions, approved: approve } });
     } catch (e: any) {
       setPatchError(e?.message ?? String(e));
     } finally {
