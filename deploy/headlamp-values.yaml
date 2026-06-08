@@ -27,7 +27,7 @@ config:
 
 initContainers:
   - name: mirops-plugin
-    image: ghcr.io/miropshq/mirops-ui:latest
+    image: ghcr.io/miropshq/mirops-ui:dev
     imagePullPolicy: Always
     command:
       - sh
