@@ -5,15 +5,16 @@ import {
   SimpleTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { K8s } from '@kinvolk/headlamp-plugin/lib/K8s';
+import AddIcon from '@mui/icons-material/Add';
+import Button from '@mui/material/Button';
 import React from 'react';
+import { useHistory } from 'react-router-dom';
 import { UPGRADE_ANALYSIS_RESOURCE } from '../resources';
 import { DecisionChip } from './DecisionChip';
 
 export function UpgradeAnalysisList() {
-  const [analyses, error] = K8s.ResourceClasses.CustomResourceDefinition
-    ? // eslint-disable-next-line react-hooks/rules-of-hooks
-      K8s.useList(UPGRADE_ANALYSIS_RESOURCE)
-    : [[], null];
+  const history = useHistory();
+  const [analyses, error] = K8s.useList(UPGRADE_ANALYSIS_RESOURCE);
 
   return (
     <SectionBox
@@ -21,6 +22,17 @@ export function UpgradeAnalysisList() {
         <SectionFilterHeader
           title="Upgrade Analyses"
           noNamespaceFilter={false}
+          actions={[
+            <Button
+              key="create"
+              variant="contained"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={() => history.push('/mirops/upgrade-analyses/create')}
+            >
+              Nuevo análisis
+            </Button>,
+          ]}
         />
       }
     >

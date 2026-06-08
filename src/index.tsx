@@ -4,6 +4,7 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/K8s';
 import React from 'react';
 import { RemediationPlanDetail } from './components/RemediationPlanDetail';
+import { UpgradeAnalysisCreate } from './components/UpgradeAnalysisCreate';
 import { UpgradeAnalysisDetail } from './components/UpgradeAnalysisDetail';
 import { UpgradeAnalysisList } from './components/UpgradeAnalysisList';
 
@@ -30,6 +31,14 @@ registerRoute({
   name: 'upgradeAnalysisList',
   exact: true,
   component: () => <UpgradeAnalysisList />,
+});
+
+registerRoute({
+  path: '/mirops/upgrade-analyses/create',
+  sidebar: 'upgradeAnalyses',
+  name: 'upgradeAnalysisCreate',
+  exact: true,
+  component: () => <UpgradeAnalysisCreate />,
 });
 
 registerRoute({
