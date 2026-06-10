@@ -413,9 +413,10 @@ export function UpgradeAnalysisCreate() {
               <TextField
                 label="Path"
                 fullWidth
+                placeholder="/var/mirops/reports"
                 value={form.sourcePath}
                 onChange={e => set('sourcePath', e.target.value)}
-                helperText="Ruta del archivo en el filesystem del operator"
+                helperText="Déjalo vacío para usar el default /var/mirops/reports/<nombre>.json (es desde donde el plugin carga el reporte). Cambiarlo rompería la vista del reporte."
               />
             )}
 

@@ -65,6 +65,93 @@ function WorkloadTable({
   );
 }
 
+interface WorkloadRow {
+  namespace: string;
+  name: string;
+  pods?: { name: string; reason?: string; restarts: number }[];
+}
+
+// Renders a workload table where the namespace, the workload and each problem
+// pod link to their Headlamp detail view, so the user can jump straight to the
+// resource instead of just reading a name.
+function WorkloadSection<T extends WorkloadRow>({
+  title,
+  routeName,
+  rows,
+  status,
+}: {
+  title: string;
+  routeName: 'Deployment' | 'StatefulSet' | 'DaemonSet' | 'Job';
+  rows: T[];
+  status: (row: T) => string;
+}) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>{title}</Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Namespace</TableCell>
+            <TableCell>Name</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>Problem pods</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((row, i) => {
+            const problemPods = (row.pods ?? []).filter(p => p.reason || p.restarts > 0);
+            return (
+              <TableRow key={i}>
+                <TableCell>
+                  <Link routeName="namespace" params={{ name: row.namespace }}>
+                    {row.namespace}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Link routeName={routeName} params={{ namespace: row.namespace, name: row.name }}>
+                    {row.name}
+                  </Link>
+                </TableCell>
+                <TableCell>{status(row)}</TableCell>
+                <TableCell>
+                  {problemPods.length === 0 ? (
+                    '—'
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      {problemPods.map(p => (
+                        <Box
+                          key={p.name}
+                          sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}
+                        >
+                          <Link
+                            routeName="Pod"
+                            params={{ namespace: row.namespace, name: p.name }}
+                          >
+                            {p.name}
+                          </Link>
+                          {p.reason && (
+                            <Chip label={p.reason} size="small" color="warning" variant="outlined" />
+                          )}
+                          {p.restarts > 0 && (
+                            <Typography variant="caption" color="text.secondary">
+                              {p.restarts} restarts
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </Box>
+  );
+}
+
 export function UpgradeAnalysisDetail() {
   const { namespace, name } = useParams<{ namespace: string; name: string }>();
   const [item, error] = UpgradeAnalysis.useGet(name, namespace);
@@ -299,46 +386,52 @@ export function UpgradeAnalysisDetail() {
             <Divider sx={{ mb: 3 }} />
 
             {/* Workloads */}
-            <WorkloadTable
-              title="Nodes"
-              rows={report.workloads.nodes}
-              columns={[
-                { label: 'Name', key: 'name' },
-                { label: 'Status', key: 'status' },
-              ]}
-            />
-            <WorkloadTable
+            {report.workloads.nodes.length > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>Nodes</Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {report.workloads.nodes.map(n => (
+                      <TableRow key={n.name}>
+                        <TableCell>
+                          <Link routeName="node" params={{ name: n.name }}>{n.name}</Link>
+                        </TableCell>
+                        <TableCell>{n.status}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
+            <WorkloadSection
               title="Deployments"
-              rows={report.workloads.deployments.map(d => ({
-                ...d,
-                replicas: `${d.readyReplicas}/${d.desiredReplicas}`,
-              }))}
-              columns={[
-                { label: 'Namespace', key: 'namespace' },
-                { label: 'Name', key: 'name' },
-                { label: 'Ready', key: 'replicas' },
-              ]}
+              routeName="Deployment"
+              rows={report.workloads.deployments}
+              status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
             />
-            <WorkloadTable
+            <WorkloadSection
               title="StatefulSets"
-              rows={report.workloads.statefulsets.map(d => ({
-                ...d,
-                replicas: `${d.readyReplicas}/${d.desiredReplicas}`,
-              }))}
-              columns={[
-                { label: 'Namespace', key: 'namespace' },
-                { label: 'Name', key: 'name' },
-                { label: 'Ready', key: 'replicas' },
-              ]}
+              routeName="StatefulSet"
+              rows={report.workloads.statefulsets}
+              status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
             />
-            <WorkloadTable
+            <WorkloadSection
               title="DaemonSets"
+              routeName="DaemonSet"
               rows={report.workloads.daemonsets}
-              columns={[
-                { label: 'Namespace', key: 'namespace' },
-                { label: 'Name', key: 'name' },
-                { label: 'Unavailable', key: 'numberUnavailable' },
-              ]}
+              status={d => `${d.numberUnavailable} unavailable`}
+            />
+            <WorkloadSection
+              title="Jobs"
+              routeName="Job"
+              rows={report.workloads.jobs}
+              status={j => `${j.active} active`}
             />
             {report.workloads.deprecatedApis && report.workloads.deprecatedApis.length > 0 && (
               <WorkloadTable
