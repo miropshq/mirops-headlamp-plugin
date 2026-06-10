@@ -15,7 +15,7 @@ import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UpgradeAnalysis } from '../resources';
+import { RemediationPlan, UpgradeAnalysis } from '../resources';
 import { Report } from '../types';
 import { DecisionChip } from './DecisionChip';
 import { ScoreGauge } from './ScoreGauge';
@@ -68,6 +68,7 @@ function WorkloadTable({
 export function UpgradeAnalysisDetail() {
   const { namespace, name } = useParams<{ namespace: string; name: string }>();
   const [item, error] = UpgradeAnalysis.useGet(name, namespace);
+  const [plans] = RemediationPlan.useList({ namespace });
   const [report, setReport] = useState<Report | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -95,7 +96,38 @@ export function UpgradeAnalysisDetail() {
   const status = item.status ?? {};
   const decision = status.decision ?? 'WARNING';
   const score = status.totalScore ?? 0;
-  const remediationRef = item.metadata?.annotations?.['mirops.io/remediation-plan'];
+
+  // decision === ERROR is a config error (e.g. targetVersion not higher than the
+  // live cluster): the analysis did not run, so there is no score/report. Render
+  // a config-error banner instead of the normal verdict + report flow.
+  if (decision === 'ERROR') {
+    return (
+      <SectionBox title={`Upgrade Analysis: ${name}`}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" fontWeight={600}>Configuration error</Typography>
+          <Typography variant="body2">
+            {status.reason ??
+              'This analysis could not run. Check that spec.targetVersion is higher than the current cluster version.'}
+          </Typography>
+        </Alert>
+        {item.spec?.targetVersion && (
+          <Chip label={`Target: ${item.spec.targetVersion}`} size="small" variant="outlined" />
+        )}
+      </SectionBox>
+    );
+  }
+
+  // The operator links a RemediationPlan back to its analysis via
+  // spec.upgradeAnalysisRef (no annotation on the analysis itself).
+  const remediationPlan = plans?.find(p => p.spec?.upgradeAnalysisRef === name);
+  const remediationRef = remediationPlan?.metadata.name;
+
+  // AI was requested but failed: the operator sets status.aiError (categorized).
+  // Older operators only logged it, so also fall back to a heuristic.
+  const aiRequested = item.spec?.ai?.enabled === true;
+  const aiFailed =
+    !!status.aiError || (aiRequested && !status.aiReasoning && !status.aiScore);
+  const remediationRequested = aiRequested && item.spec?.ai?.remediation?.enabled === true;
 
   return (
     <>
@@ -131,6 +163,34 @@ export function UpgradeAnalysisDetail() {
           <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="subtitle2" fontWeight={600}>AI Reasoning ({status.aiModel})</Typography>
             <Typography variant="body2">{status.aiReasoning}</Typography>
+          </Alert>
+        )}
+
+        {/* AI was enabled but produced no result → it failed in the operator */}
+        {aiFailed && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              AI unavailable — showing base analysis only
+            </Typography>
+            <Typography variant="body2">
+              AI scoring was enabled but the AI call failed, so the score and decision
+              above are the base analysis only
+              {remediationRequested && ', and no RemediationPlan was generated'}.
+            </Typography>
+            {status.aiError ? (
+              <Typography
+                variant="body2"
+                component="pre"
+                sx={{ mt: 1, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.8rem' }}
+              >
+                {status.aiError}
+              </Typography>
+            ) : (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Check the operator logs for the exact cause (common: invalid/empty API
+                key or insufficient API credits).
+              </Typography>
+            )}
           </Alert>
         )}
 

@@ -39,6 +39,7 @@ export interface UpgradeAnalysisStatus {
   aiScore?: number;
   aiReasoning?: string;
   aiModel?: string;
+  aiError?: string;
   lastAnalysisTime?: string;
   reportPath?: string;
   conditions?: {

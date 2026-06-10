@@ -12,6 +12,7 @@ const COLOR_MAP: Record<Decision, string> = {
   SAFE: '#2e7d32',
   WARNING: '#ed6c02',
   BLOCK: '#d32f2f',
+  ERROR: '#9e9e9e',
 };
 
 export function ScoreGauge({ score, decision }: Props) {

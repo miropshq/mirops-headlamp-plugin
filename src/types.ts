@@ -1,4 +1,7 @@
-export type Decision = 'SAFE' | 'WARNING' | 'BLOCK';
+// SAFE/WARNING/BLOCK are real analysis results. ERROR is a config error
+// (e.g. targetVersion not higher than the live cluster) — the analysis did
+// not run; render it distinctly, not as a red BLOCK.
+export type Decision = 'SAFE' | 'WARNING' | 'BLOCK' | 'ERROR';
 export type RiskLevel = 'low' | 'medium' | 'high';
 export type RemediationPhase = 'pending-approval' | 'running' | 'completed' | 'failed';
 export type ActionType = 'restart-pod' | 'scale-deployment' | 'cordon-node' | 'delete-pod';
