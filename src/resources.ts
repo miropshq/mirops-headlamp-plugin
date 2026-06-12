@@ -40,6 +40,8 @@ export interface UpgradeAnalysisStatus {
   aiReasoning?: string;
   aiModel?: string;
   aiError?: string;
+  addonsChecked?: number;
+  incompatibleAddons?: number;
   lastAnalysisTime?: string;
   reportPath?: string;
   conditions?: {

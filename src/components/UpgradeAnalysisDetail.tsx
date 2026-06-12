@@ -1,4 +1,4 @@
-import { ApiProxy } from '@kinvolk/headlamp-plugin/lib';
+import { ApiProxy, Router } from '@kinvolk/headlamp-plugin/lib';
 import { Link, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -14,10 +14,12 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useHistory, useParams } from 'react-router-dom';
 import { RemediationPlan, UpgradeAnalysis } from '../resources';
-import { Report } from '../types';
+import { riskColor } from '../riskColor';
+import { AddonStatus, NamespaceRisk, Report } from '../types';
 import { DecisionChip } from './DecisionChip';
+import { DependencyGraph } from './DependencyGraph';
 import { ScoreGauge } from './ScoreGauge';
 
 function ConditionAlert({ label, active }: { label: string; active: boolean }) {
@@ -31,6 +33,106 @@ function MetricCard({ label, value }: { label: string; value: string | number })
       <Typography variant="h6" fontWeight={700}>{value}</Typography>
       <Typography variant="caption" color="text.secondary">{label}</Typography>
     </Paper>
+  );
+}
+
+const ADDON_STATUS_COLOR: Record<AddonStatus, 'success' | 'error' | 'default'> = {
+  compatible: 'success',
+  incompatible: 'error',
+  unknown: 'default',
+};
+
+function AddonCompatibilityTable({ report }: { report: Report }) {
+  const addons = report.addons ?? [];
+  if (addons.length === 0) return null;
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Add-on Compatibility
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Add-on</TableCell>
+            <TableCell>Version</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>Action</TableCell>
+            <TableCell>Note</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {addons.map(a => (
+            <TableRow key={a.name}>
+              <TableCell>{a.name}</TableCell>
+              <TableCell>{a.version}</TableCell>
+              <TableCell>
+                <Chip
+                  label={a.status}
+                  color={ADDON_STATUS_COLOR[a.status] ?? 'default'}
+                  size="small"
+                  variant={a.status === 'unknown' ? 'outlined' : 'filled'}
+                />
+              </TableCell>
+              <TableCell>
+                {a.status === 'incompatible' && a.requiredVersion
+                  ? `upgrade to ${a.requiredVersion}`
+                  : '—'}
+              </TableCell>
+              <TableCell sx={{ maxWidth: 420 }}>
+                <Typography variant="caption">{a.note ?? '—'}</Typography>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
+  );
+}
+
+function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] }) {
+  const history = useHistory();
+  if (byNamespace.length === 0) return null;
+  const sorted = [...byNamespace].sort((a, b) => b.risk - a.risk);
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Namespace Risk
+      </Typography>
+      <Grid container spacing={2}>
+        {sorted.map(ns => {
+          // "cluster" is the synthetic bucket for cluster-scoped components
+          // (add-ons, nodes) — there is no Namespace object to navigate to.
+          const navigable = ns.namespace !== 'cluster';
+          return (
+            <Grid item xs={6} sm={4} md={2} key={ns.namespace}>
+              <Paper
+                onClick={
+                  navigable
+                    ? () =>
+                        history.push(
+                          Router.createRouteURL('namespace', { name: ns.namespace })
+                        )
+                    : undefined
+                }
+                sx={{
+                  p: 2,
+                  textAlign: 'center',
+                  bgcolor: riskColor(ns.risk),
+                  color: '#fff',
+                  cursor: navigable ? 'pointer' : 'default',
+                }}
+              >
+                <Typography variant="h6" fontWeight={700}>{ns.risk}</Typography>
+                <Typography variant="body2" noWrap>{ns.namespace}</Typography>
+                <Typography variant="caption">
+                  {ns.atRisk}/{ns.components} at risk
+                </Typography>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
+    </Box>
   );
 }
 
@@ -228,6 +330,14 @@ export function UpgradeAnalysisDetail() {
               {item.spec?.targetVersion && (
                 <Chip label={`Target: ${item.spec.targetVersion}`} size="small" variant="outlined" />
               )}
+              {status.addonsChecked !== undefined && status.addonsChecked > 0 && (
+                <Chip
+                  label={`Add-ons: ${status.addonsChecked} checked · ${status.incompatibleAddons ?? 0} incompatible`}
+                  size="small"
+                  variant="outlined"
+                  color={(status.incompatibleAddons ?? 0) > 0 ? 'error' : 'success'}
+                />
+              )}
             </Box>
             {status.reason && (
               <Typography variant="body2" color="text.secondary">{status.reason}</Typography>
@@ -356,6 +466,9 @@ export function UpgradeAnalysisDetail() {
               <Grid item xs={6} sm={3}>
                 <MetricCard label="Restart Delta" value={report.metrics.stability.restartDelta} />
               </Grid>
+              <Grid item xs={6} sm={3}>
+                <MetricCard label="Add-on Issues" value={report.metrics.compatibility.addonIssues} />
+              </Grid>
             </Grid>
 
             {/* Score breakdown */}
@@ -384,6 +497,13 @@ export function UpgradeAnalysisDetail() {
             </Grid>
 
             <Divider sx={{ mb: 3 }} />
+
+            {/* Logical mirror: add-on compatibility, namespace risk, dependency graph */}
+            <AddonCompatibilityTable report={report} />
+            {report.risk?.byNamespace && (
+              <NamespaceRiskHeatmap byNamespace={report.risk.byNamespace} />
+            )}
+            {report.graph && <DependencyGraph graph={report.graph} />}
 
             {/* Workloads */}
             {report.workloads.nodes.length > 0 && (

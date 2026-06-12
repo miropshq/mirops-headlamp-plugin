@@ -24,6 +24,59 @@ export interface ActionResult {
   executedAt?: string;
 }
 
+// ─── Logical mirror sections (all omitempty in report.json) ──────────────────
+
+export type AddonStatus = 'compatible' | 'incompatible' | 'unknown';
+
+export interface AddonReport {
+  name: string;
+  version: string;
+  status: AddonStatus;
+  // The ADD-ON version to upgrade TO for the target k8s. Render
+  // "upgrade to {requiredVersion}" when status is incompatible.
+  requiredVersion?: string;
+  note?: string;
+}
+
+export type GraphNodeType = 'workload' | 'network' | 'addon' | 'config' | 'storage' | 'infra';
+export type GraphEdgeType =
+  | 'routes-to'
+  | 'selects'
+  | 'uses-config'
+  | 'uses-storage'
+  | 'runs-on'
+  | 'depends-on';
+
+export interface GraphNode {
+  id: string; // e.g. "Deployment/shop/frontend"
+  kind: string;
+  name: string;
+  namespace?: string;
+  type: GraphNodeType;
+  status?: string;
+  // 0–100, already propagated through dependencies; >=50 means "at risk"
+  risk: number;
+}
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  type: GraphEdgeType;
+}
+
+export interface ReportGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface NamespaceRisk {
+  // "cluster" bucket holds cluster-scoped components (add-ons, nodes)
+  namespace: string;
+  risk: number;
+  components: number;
+  atRisk: number;
+}
+
 // Report JSON shape served by the operator HTTP endpoint
 export interface Report {
   generatedAt: string;
@@ -104,4 +157,8 @@ export interface Report {
     }[];
   };
   issues?: string[];
+  // Logical mirror sections (omitted by older operators)
+  addons?: AddonReport[];
+  graph?: ReportGraph;
+  risk?: { byNamespace: NamespaceRisk[] };
 }
