@@ -13,8 +13,15 @@
 #   kubectl -n headlamp port-forward svc/headlamp 8080:80
 #   open http://localhost:8080
 #
-# The image is private, so create a ghcr pull secret first (see README in
-# this file's header comment) and reference it via imagePullSecrets below.
+# The image is private — create the ghcr pull secret first:
+#   kubectl create secret docker-registry ghcr-mirops \
+#     --namespace headlamp \
+#     --docker-server=ghcr.io \
+#     --docker-username=<github-user> \
+#     --docker-password=<PAT with read:packages>
+#
+# After CI pushes a new :dev image, refresh with:
+#   kubectl -n headlamp rollout restart deploy/headlamp
 
 # Pull secret for the private ghcr.io plugin image. Applied to the pod so it
 # covers both the main Headlamp image and the mirops-plugin initContainer.
