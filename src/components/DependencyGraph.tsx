@@ -1,7 +1,8 @@
 import '@xyflow/react/dist/style.css';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import ButtonGroup from '@mui/material/ButtonGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import Slider from '@mui/material/Slider';
 import { useTheme } from '@mui/material/styles';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
@@ -177,21 +178,21 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
           }
           label={<Typography variant="body2">Show all</Typography>}
         />
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 240 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Typography variant="body2" color={showAll ? 'text.disabled' : 'text.secondary'}>
             Min risk
           </Typography>
-          <Slider
-            size="small"
-            value={minRisk}
-            onChange={(_, v) => setMinRisk(v as number)}
-            disabled={showAll}
-            marks={MIN_RISK_MARKS}
-            step={null}
-            min={0}
-            max={75}
-            sx={{ width: 160 }}
-          />
+          <ButtonGroup size="small" disabled={showAll} variant="outlined">
+            {MIN_RISK_MARKS.map(m => (
+              <Button
+                key={m.value}
+                variant={minRisk === m.value ? 'contained' : 'outlined'}
+                onClick={() => setMinRisk(m.value)}
+              >
+                {m.label}
+              </Button>
+            ))}
+          </ButtonGroup>
         </Box>
         <Typography variant="caption" color="text.secondary">
           showing {visible.nodes.length} of {graph.nodes.length} components
