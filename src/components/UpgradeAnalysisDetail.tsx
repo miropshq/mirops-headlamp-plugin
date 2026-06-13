@@ -90,10 +90,20 @@ function AddonCompatibilityTable({ report }: { report: Report }) {
   );
 }
 
+// Synthetic bucket holding cluster-scoped components (Nodes) — not a real
+// Namespace, so it isn't navigable and is sorted last with distinct styling.
+const CLUSTER_SCOPED_BUCKET = 'cluster-scoped';
+
 function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] }) {
   const history = useHistory();
   if (byNamespace.length === 0) return null;
-  const sorted = [...byNamespace].sort((a, b) => b.risk - a.risk);
+  const sorted = [...byNamespace].sort((a, b) => {
+    // Keep the synthetic cluster-scoped tile last regardless of risk.
+    const aSynthetic = a.namespace === CLUSTER_SCOPED_BUCKET;
+    const bSynthetic = b.namespace === CLUSTER_SCOPED_BUCKET;
+    if (aSynthetic !== bSynthetic) return aSynthetic ? 1 : -1;
+    return b.risk - a.risk;
+  });
   return (
     <Box sx={{ mb: 3 }}>
       <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
@@ -101,9 +111,8 @@ function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] })
       </Typography>
       <Grid container spacing={2}>
         {sorted.map(ns => {
-          // "cluster" is the synthetic bucket for cluster-scoped components
-          // (add-ons, nodes) — there is no Namespace object to navigate to.
-          const navigable = ns.namespace !== 'cluster';
+          const isClusterScoped = ns.namespace === CLUSTER_SCOPED_BUCKET;
+          const navigable = !isClusterScoped;
           return (
             <Grid item xs={6} sm={4} md={2} key={ns.namespace}>
               <Paper
@@ -121,6 +130,8 @@ function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] })
                   textAlign: 'center',
                   borderLeft: '4px solid',
                   borderLeftColor: riskSeverity(ns.risk).color,
+                  borderStyle: isClusterScoped ? 'dashed' : 'solid',
+                  bgcolor: isClusterScoped ? 'action.hover' : undefined,
                   cursor: navigable ? 'pointer' : 'default',
                   display: 'flex',
                   flexDirection: 'column',
@@ -129,7 +140,9 @@ function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] })
                 }}
               >
                 <RiskBadge risk={ns.risk} />
-                <Typography variant="body2" noWrap>{ns.namespace}</Typography>
+                <Typography variant="body2" noWrap>
+                  {isClusterScoped ? 'cluster-scoped' : ns.namespace}
+                </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {ns.atRisk}/{ns.components} at risk
                 </Typography>
