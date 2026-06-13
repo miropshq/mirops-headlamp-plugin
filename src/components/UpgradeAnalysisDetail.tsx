@@ -16,10 +16,11 @@ import Typography from '@mui/material/Typography';
 import React, { useEffect, useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
 import { RemediationPlan, UpgradeAnalysis } from '../resources';
-import { riskColor } from '../riskColor';
+import { riskSeverity } from '../riskColor';
 import { AddonStatus, NamespaceRisk, Report } from '../types';
 import { DecisionChip } from './DecisionChip';
 import { DependencyGraph } from './DependencyGraph';
+import { RiskBadge } from './RiskBadge';
 import { ScoreGauge } from './ScoreGauge';
 
 function ConditionAlert({ label, active }: { label: string; active: boolean }) {
@@ -106,6 +107,7 @@ function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] })
           return (
             <Grid item xs={6} sm={4} md={2} key={ns.namespace}>
               <Paper
+                variant="outlined"
                 onClick={
                   navigable
                     ? () =>
@@ -117,14 +119,18 @@ function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] })
                 sx={{
                   p: 2,
                   textAlign: 'center',
-                  bgcolor: riskColor(ns.risk),
-                  color: '#fff',
+                  borderLeft: '4px solid',
+                  borderLeftColor: riskSeverity(ns.risk).color,
                   cursor: navigable ? 'pointer' : 'default',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 0.5,
                 }}
               >
-                <Typography variant="h6" fontWeight={700}>{ns.risk}</Typography>
+                <RiskBadge risk={ns.risk} />
                 <Typography variant="body2" noWrap>{ns.namespace}</Typography>
-                <Typography variant="caption">
+                <Typography variant="caption" color="text.secondary">
                   {ns.atRisk}/{ns.components} at risk
                 </Typography>
               </Paper>

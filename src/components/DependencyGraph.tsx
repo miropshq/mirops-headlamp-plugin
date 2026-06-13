@@ -15,7 +15,7 @@ import {
   ReactFlow,
 } from '@xyflow/react';
 import React, { useMemo, useState } from 'react';
-import { AT_RISK_THRESHOLD, riskColor } from '../riskColor';
+import { HIGH_RISK_THRESHOLD, riskSeverity } from '../riskColor';
 import { GraphNode, GraphNodeType, ReportGraph } from '../types';
 
 // Layered layout: one column per node type, following the dependency
@@ -83,17 +83,18 @@ function buildNodes(visible: VisibleGraph): Node[] {
     );
     list.forEach((n, row) => {
       const dimmed = visible.dimmedIds.has(n.id);
+      const { level, color } = riskSeverity(n.risk);
       rfNodes.push({
         id: n.id,
         position: { x: col * COLUMN_GAP, y: row * ROW_GAP },
         connectable: false,
         data: {
           label: (
-            <div title={`${n.kind} · risk ${n.risk}${n.status ? ` · ${n.status}` : ''}`}>
+            <div title={`${n.kind} · ${level} risk${n.status ? ` · ${n.status}` : ''}`}>
               <strong>{n.name}</strong>
               <div style={{ fontSize: 10, opacity: 0.85 }}>
                 {n.kind}
-                {n.namespace ? ` · ${n.namespace}` : ''} · risk {n.risk}
+                {n.namespace ? ` · ${n.namespace}` : ''} · {level}
               </div>
             </div>
           ),
@@ -111,10 +112,10 @@ function buildNodes(visible: VisibleGraph): Node[] {
               textAlign: 'left' as const,
             }
           : {
-              background: riskColor(n.risk),
+              background: color,
               color: '#fff',
               border:
-                n.risk >= AT_RISK_THRESHOLD
+                n.risk >= HIGH_RISK_THRESHOLD
                   ? '2px solid #ff5252'
                   : '1px solid rgba(255,255,255,0.25)',
               borderRadius: 8,
@@ -199,7 +200,7 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
         </Typography>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-        Nodes colored by propagated risk (green 0 → red 100); gray dashed nodes are
+        Nodes colored by risk severity (None→Critical); gray dashed nodes are
         healthy direct neighbors shown for context; edges labeled by dependency type.
       </Typography>
       <Box sx={{ height: 520, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>

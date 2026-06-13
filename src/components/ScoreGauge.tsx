@@ -53,7 +53,7 @@ export function ScoreGauge({ score, decision }: Props) {
         </Typography>
       </Box>
       <Typography variant="caption" color="text.secondary">
-        Score / 100
+        Readiness Score
       </Typography>
     </Box>
   );
