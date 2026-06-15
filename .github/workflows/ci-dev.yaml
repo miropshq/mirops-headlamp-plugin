@@ -73,7 +73,7 @@ jobs:
           file: Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ghcr.io/${{ github.repository }}:dev-${{ matrix.tag_suffix }}
+          tags: ghcr.io/${{ github.repository }}-dev:dev-${{ matrix.tag_suffix }}
           cache-from: type=gha,scope=${{ matrix.tag_suffix }}
           cache-to: type=gha,mode=max,scope=${{ matrix.tag_suffix }}
 
@@ -97,10 +97,10 @@ jobs:
       - name: Create manifest list and push
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/${{ github.repository }}:dev \
-            -t ghcr.io/${{ github.repository }}:sha-${{ github.sha }} \
-            ghcr.io/${{ github.repository }}:dev-linux-amd64 \
-            ghcr.io/${{ github.repository }}:dev-linux-arm64
+            -t ghcr.io/${{ github.repository }}-dev:dev \
+            -t ghcr.io/${{ github.repository }}-dev:sha-${{ github.sha }} \
+            ghcr.io/${{ github.repository }}-dev:dev-linux-amd64 \
+            ghcr.io/${{ github.repository }}-dev:dev-linux-arm64
 
       - name: Inspect manifest
-        run: docker buildx imagetools inspect ghcr.io/${{ github.repository }}:dev
+        run: docker buildx imagetools inspect ghcr.io/${{ github.repository }}-dev:dev
