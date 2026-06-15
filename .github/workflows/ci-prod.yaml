@@ -47,7 +47,7 @@ jobs:
     name: Semantic Release
     runs-on: ubuntu-latest
     needs: ci
-    if: github.ref == 'refs/heads/main'
+    
     outputs:
       new_release_published: ${{ steps.release.outputs.new_release_published }}
       new_release_version: ${{ steps.release.outputs.new_release_version }}
@@ -63,10 +63,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ─── Build nativo por arquitectura ────────────────────────────────────────────
-  # Cada runner compila y sube directamente con tag por arquitectura.
-  # El job push-release combina ambos en un manifest list.
-  build-release:
+  # ─── Native build per architecture ───────────────────────────────────────────
+  # Each runner compiles and pushes directly with an architecture-specific tag.
+  # The push-release job combines both into a manifest list.
+  build:
     name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
     needs: semantic-release
@@ -108,11 +108,11 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.tag_suffix }}
 
   # ─── Merge manifest list ────────────────────────────────────────────────────
-  # Combina los dos tags de arquitectura en un manifest list con los tags finales.
-  push-release:
+  # Combines both architecture tags into a manifest list with the final tags.
+  push:
     name: Push release image (merge manifest)
     runs-on: ubuntu-latest
-    needs: [semantic-release, build-release]
+    needs: build
     steps:
       - name: Login to the Container registry
         uses: docker/login-action@v3
