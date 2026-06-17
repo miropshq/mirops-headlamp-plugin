@@ -2,8 +2,13 @@ import { ApiProxy, Router } from '@kinvolk/headlamp-plugin/lib';
 import { Link, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
@@ -280,6 +285,8 @@ export function UpgradeAnalysisDetail() {
   const [report, setReport] = useState<Report | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!item || !namespace || !name) return;
@@ -602,9 +609,40 @@ export function UpgradeAnalysisDetail() {
                 <Typography variant="body2">{report.aiReasoning}</Typography>
               </Alert>
             )}
+
+            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="outlined" size="small" onClick={() => setShowRawJson(true)}>
+                Raw JSON
+              </Button>
+            </Box>
           </>
         )}
       </SectionBox>
+
+      <Dialog open={showRawJson} onClose={() => setShowRawJson(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Raw Report JSON</DialogTitle>
+        <DialogContent dividers>
+          <Box
+            component="pre"
+            sx={{ m: 0, fontSize: '0.75rem', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+          >
+            {JSON.stringify(report, null, 2)}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            size="small"
+            onClick={() => {
+              navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+          >
+            {copied ? 'Copied!' : 'Copy'}
+          </Button>
+          <Button size="small" onClick={() => setShowRawJson(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
