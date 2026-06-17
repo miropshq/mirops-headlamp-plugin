@@ -34,7 +34,7 @@ config:
 
 initContainers:
   - name: mirops-plugin
-    image: ghcr.io/miropshq/mirops-ui:dev
+    image: ghcr.io/miropshq/mirops-headlamp-plugin:dev
     imagePullPolicy: Always
     command:
       - sh

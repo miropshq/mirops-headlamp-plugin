@@ -1,4 +1,4 @@
-name: Mirops UI - Headlamp Plugin for Mirops Operator - Production
+name: Mirops UI - Headlamp Plugin for Mirops Operator - Release
 
 on:
   push:
