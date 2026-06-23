@@ -7,11 +7,11 @@ interface Props {
 }
 
 // ERROR is a config error, not an analysis verdict — render it neutral/grey
-// and labeled so it doesn't read as a red BLOCK.
+// and labeled so it doesn't read as a red CRITICAL.
 const COLOR_MAP: Record<Decision, 'success' | 'warning' | 'error' | 'default'> = {
   SAFE: 'success',
   WARNING: 'warning',
-  BLOCK: 'error',
+  CRITICAL: 'error',
   ERROR: 'default',
 };
 

@@ -1,7 +1,7 @@
-// SAFE/WARNING/BLOCK are real analysis results. ERROR is a config error
+// SAFE/WARNING/CRITICAL are real analysis results. ERROR is a config error
 // (e.g. targetVersion not higher than the live cluster) — the analysis did
-// not run; render it distinctly, not as a red BLOCK.
-export type Decision = 'SAFE' | 'WARNING' | 'BLOCK' | 'ERROR';
+// not run; render it distinctly, not as a red CRITICAL.
+export type Decision = 'SAFE' | 'WARNING' | 'CRITICAL' | 'ERROR';
 export type RiskLevel = 'low' | 'medium' | 'high';
 export type RemediationPhase = 'pending-approval' | 'running' | 'completed' | 'failed';
 export type ActionType = 'restart-pod' | 'scale-deployment' | 'cordon-node' | 'delete-pod';
@@ -84,9 +84,13 @@ export interface Report {
   clusterVersion: string;
   targetVersion: string;
   decision: {
-    threshold: number;
+    // allow is THE gate (boolean): true = upgrade allowed. Derived from
+    // deterministic facts (incompatible add-ons, Lost PVCs, PDB, CPU/mem,
+    // pods not ready beyond a profile ratio) — not from the score.
     allow: boolean;
     level: Decision;
+    // Every blocker is a CRITICAL-level reason; empty when not blocked.
+    blockers?: string[];
   };
   reason: string;
   aiReasoning?: string;
@@ -113,6 +117,8 @@ export interface Report {
     highCpuPressure: boolean;
     highMemoryPressure: boolean;
     unstableCluster: boolean;
+    // Pods not ready beyond the block ratio.
+    severelyUnstable?: boolean;
   };
   metrics: {
     pods: { total: number; notReady: number; restarts: number };
@@ -146,6 +152,10 @@ export interface Report {
       namespace: string;
       name: string;
       active: number;
+      // Set for terminally-failed Jobs: status 'Failed' with a reason like
+      // 'BackoffLimitExceeded'.
+      status?: 'Active' | 'Failed';
+      reason?: string;
       pods?: { name: string; reason?: string; restarts: number }[];
     }[];
     pdbs?: { namespace: string; name: string }[];

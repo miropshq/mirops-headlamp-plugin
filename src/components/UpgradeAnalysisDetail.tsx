@@ -1,6 +1,7 @@
 import { ApiProxy, Router } from '@kinvolk/headlamp-plugin/lib';
 import { Link, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
@@ -98,6 +99,33 @@ function AddonCompatibilityTable({ report }: { report: Report }) {
 // Synthetic bucket holding cluster-scoped components (Nodes) — not a real
 // Namespace, so it isn't navigable and is sorted last with distinct styling.
 const CLUSTER_SCOPED_BUCKET = 'cluster-scoped';
+
+// The operator serves report.json from an in-cluster Service named
+// 'mirops-reports'. UpgradeAnalysis is cluster-scoped so it no longer carries a
+// namespace to locate it, and the operator can be installed in any namespace.
+// The deployer sets that namespace in headlamp-values.yaml; the initContainer
+// writes it to a config.json next to the plugin, which we read at runtime. This
+// default is the fallback when no config.json is present.
+const REPORTS_SERVICE_NAME = 'mirops-reports';
+const REPORTS_SERVICE_NAMESPACE = 'mirops';
+
+// Read the operator's namespace from the plugin's runtime config.json (written
+// by the Helm initContainer from headlamp-values.yaml). Falls back to the
+// default until/unless the file resolves.
+function useReportsNamespace(): string {
+  const [namespace, setNamespace] = useState(REPORTS_SERVICE_NAMESPACE);
+  useEffect(() => {
+    fetch('/plugins/mirops/config.json')
+      .then(r => (r.ok ? r.json() : null))
+      .then(cfg => {
+        if (cfg?.reportsNamespace) setNamespace(cfg.reportsNamespace);
+      })
+      .catch(() => {
+        /* no config.json — keep the default */
+      });
+  }, []);
+  return namespace;
+}
 
 function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] }) {
   const history = useHistory();
@@ -279,31 +307,35 @@ function WorkloadSection<T extends WorkloadRow>({
 }
 
 export function UpgradeAnalysisDetail() {
-  const { namespace, name } = useParams<{ namespace: string; name: string }>();
-  const [item, error] = UpgradeAnalysis.useGet(name, namespace);
-  const [plans] = RemediationPlan.useList({ namespace });
+  const { name } = useParams<{ name: string }>();
+  const [item, error] = UpgradeAnalysis.useGet(name);
+  const [plans] = RemediationPlan.useList();
+  const reportsNamespace = useReportsNamespace();
   const [report, setReport] = useState<Report | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!item || !namespace || !name) return;
+    if (!item || !name) return;
     setReportLoading(true);
     setReportError(null);
 
     // The operator serves reports from an in-cluster service that is not
     // reachable from the browser directly. Route the request through the
-    // Kubernetes API server service proxy via Headlamp's backend.
+    // Kubernetes API server service proxy via Headlamp's backend. The CR is
+    // cluster-scoped, so the Service namespace is discovered at runtime.
     const path =
-      `/api/v1/namespaces/${namespace}/services/mirops-reports:8084` +
+      `/api/v1/namespaces/${reportsNamespace}/services/${REPORTS_SERVICE_NAME}:8084` +
       `/proxy/reports/${name}.json`;
     ApiProxy.request(path)
       .then((data: Report) => setReport(data))
       .catch(e => setReportError(e.message))
       .finally(() => setReportLoading(false));
-  }, [item, namespace, name]);
+  }, [item, name, reportsNamespace]);
 
   if (error) return <Alert severity="error">{String(error)}</Alert>;
   if (!item) return <CircularProgress />;
@@ -311,6 +343,24 @@ export function UpgradeAnalysisDetail() {
   const status = item.status ?? {};
   const decision = status.decision ?? 'WARNING';
   const score = status.totalScore ?? 0;
+
+  // Re-run the analysis on demand. The operator re-reconciles when the
+  // 'mirops.io/refresh' annotation changes (bypassing the resync interval); this
+  // is a merge patch that only touches the annotation.
+  async function reanalyze() {
+    if (!item) return;
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      await item.patch({
+        metadata: { annotations: { 'mirops.io/refresh': String(Date.now()) } },
+      });
+    } catch (e) {
+      setRefreshError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // decision === ERROR is a config error (e.g. targetVersion not higher than the
   // live cluster): the analysis did not run, so there is no score/report. Render
@@ -372,12 +422,20 @@ export function UpgradeAnalysisDetail() {
               <Box sx={{ mt: 1 }}>
                 <Link
                   routeName="remediationPlanDetail"
-                  params={{ namespace, name: remediationRef }}
+                  params={{ name: remediationRef }}
                 >
                   View Remediation Plan →
                 </Link>
               </Box>
             )}
+            <Box sx={{ mt: 2 }}>
+              <Button variant="contained" size="small" disabled={refreshing} onClick={reanalyze}>
+                {refreshing ? <CircularProgress size={18} /> : 'Re-analyze'}
+              </Button>
+              {refreshError && (
+                <Alert severity="error" sx={{ mt: 1 }}>{refreshError}</Alert>
+              )}
+            </Box>
           </Box>
         </Box>
 
@@ -452,6 +510,24 @@ export function UpgradeAnalysisDetail() {
         )}
         {report && (
           <>
+            {/* Why blocked — the red verdict comes with its explicit causes, so
+                the headline never contradicts the detail. Falls back to the
+                single-line reason when blockers is empty. */}
+            {report.decision.level === 'CRITICAL' && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                <AlertTitle>Upgrade blocked</AlertTitle>
+                {report.decision.blockers?.length ? (
+                  <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                    {report.decision.blockers.map(b => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  report.reason
+                )}
+              </Alert>
+            )}
+
             {/* Conditions warnings */}
             <Box sx={{ mb: 2 }}>
               <ConditionAlert label="PDB is blocking upgrades" active={report.conditions.pdbBlocking} />

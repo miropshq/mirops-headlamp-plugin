@@ -2,6 +2,7 @@
   "name": "mirops",
   "description": "Headlamp plugin for the mirops Kubernetes operator",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "main": "dist/main.js",
   "scripts": {

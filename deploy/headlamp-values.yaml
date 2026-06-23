@@ -36,10 +36,19 @@ initContainers:
   - name: mirops-plugin
     image: ghcr.io/miropshq/mirops-headlamp-plugin:dev
     imagePullPolicy: Always
+    env:
+      # Namespace where the mirops operator (and its mirops-reports Service) is
+      # installed. The plugin reads this to proxy report.json from the right
+      # place. Change it if you install the operator elsewhere (e.g. "miropssa").
+      - name: MIROPS_NAMESPACE
+        value: mirops
     command:
       - sh
       - -c
-      - 'mkdir -p /headlamp/plugins/mirops && cp -r /plugins/mirops/* /headlamp/plugins/mirops/'
+      - |
+        mkdir -p /headlamp/plugins/mirops
+        cp -r /plugins/mirops/* /headlamp/plugins/mirops/
+        printf '{"reportsNamespace":"%s"}' "$MIROPS_NAMESPACE" > /headlamp/plugins/mirops/config.json
     volumeMounts:
       - name: plugins
         mountPath: /headlamp/plugins

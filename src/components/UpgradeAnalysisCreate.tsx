@@ -1,5 +1,5 @@
 import { Icon } from '@iconify/react';
-import { K8s, Router } from '@kinvolk/headlamp-plugin/lib';
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
@@ -28,7 +28,6 @@ import { UpgradeAnalysis } from '../resources';
 
 interface FormState {
   name: string;
-  namespace: string;
   targetVersion: string;
   // scope
   scopeMode: 'all' | 'application';
@@ -45,7 +44,7 @@ interface FormState {
   // resync
   resyncInterval: string;
   // source
-  sourceType: 'file' | 's3' | 'blob';
+  sourceType: 'file' | 's3' | 'blob' | 'pvc';
   sourcePath: string;
   sourceBucket: string;
   sourceRegion: string;
@@ -58,7 +57,6 @@ interface FormState {
 
 const DEFAULT: FormState = {
   name: '',
-  namespace: 'default',
   targetVersion: '',
   scopeMode: 'all',
   excludeNamespaces: [],
@@ -112,7 +110,7 @@ function buildCR(f: FormState) {
   }
 
   const source: any = { type: f.sourceType };
-  if (f.sourceType === 'file' && f.sourcePath) source.path = f.sourcePath;
+  if ((f.sourceType === 'file' || f.sourceType === 'pvc') && f.sourcePath) source.path = f.sourcePath;
   if (f.sourceType === 's3') {
     if (f.sourceBucket) source.bucket = f.sourceBucket;
     if (f.sourceRegion) source.region = f.sourceRegion;
@@ -132,7 +130,7 @@ function buildCR(f: FormState) {
   return {
     apiVersion: 'mirops.mirops.io/v1',
     kind: 'UpgradeAnalysis',
-    metadata: { name: f.name, namespace: f.namespace },
+    metadata: { name: f.name },
     spec,
   };
 }
@@ -143,7 +141,6 @@ export function UpgradeAnalysisCreate() {
   const [newNs, setNewNs] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [namespaces] = K8s.ResourceClasses.Namespace.useList();
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -171,7 +168,6 @@ export function UpgradeAnalysisCreate() {
       await UpgradeAnalysis.apiEndpoint.post(cr);
       history.push(
         Router.createRouteURL('upgradeAnalysisDetail', {
-          namespace: form.namespace,
           name: form.name,
         })
       );
@@ -182,8 +178,6 @@ export function UpgradeAnalysisCreate() {
     }
   }
 
-  const nsOptions: string[] = namespaces?.map((n: any) => n.metadata.name) ?? ['default'];
-
   return (
     <Paper sx={{ maxWidth: 720, mx: 'auto', p: 4, mt: 3 }}>
       <Typography variant="h5" fontWeight={700} sx={{ mb: 3 }}>
@@ -193,28 +187,15 @@ export function UpgradeAnalysisCreate() {
       <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
 
         {/* ── Identidad ── */}
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <TextField
-            label="Name"
-            required
-            fullWidth
-            value={form.name}
-            onChange={e => set('name', e.target.value)}
-            helperText="Nombre del CR en el cluster"
-          />
-          <FormControl fullWidth required>
-            <InputLabel>Namespace</InputLabel>
-            <Select
-              value={form.namespace}
-              label="Namespace"
-              onChange={e => set('namespace', e.target.value)}
-            >
-              {nsOptions.map(ns => (
-                <MenuItem key={ns} value={ns}>{ns}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
+        {/* UpgradeAnalysis is cluster-scoped — no namespace field. */}
+        <TextField
+          label="Name"
+          required
+          fullWidth
+          value={form.name}
+          onChange={e => set('name', e.target.value)}
+          helperText="Nombre del CR en el cluster"
+        />
 
         <TextField
           label="Target Version"
@@ -406,6 +387,7 @@ export function UpgradeAnalysisCreate() {
                 <MenuItem value="file">File (por defecto)</MenuItem>
                 <MenuItem value="s3">S3</MenuItem>
                 <MenuItem value="blob">Azure Blob</MenuItem>
+                <MenuItem value="pvc">PVC (on-prem)</MenuItem>
               </Select>
             </FormControl>
 
@@ -417,6 +399,17 @@ export function UpgradeAnalysisCreate() {
                 value={form.sourcePath}
                 onChange={e => set('sourcePath', e.target.value)}
                 helperText="Déjalo vacío para usar el default /var/mirops/reports/<nombre>.json (es desde donde el plugin carga el reporte). Cambiarlo rompería la vista del reporte."
+              />
+            )}
+
+            {form.sourceType === 'pvc' && (
+              <TextField
+                label="Path"
+                fullWidth
+                placeholder="/var/mirops/reports"
+                value={form.sourcePath}
+                onChange={e => set('sourcePath', e.target.value)}
+                helperText="Directorio de montaje del PVC (lo monta el Helm chart con reportPVC.enabled). El operador escribe el reporte aquí."
               />
             )}
 

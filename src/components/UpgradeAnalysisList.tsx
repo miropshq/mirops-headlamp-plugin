@@ -35,13 +35,12 @@ export function UpgradeAnalysisList() {
           render: (item: UpgradeAnalysis) => (
             <Link
               routeName="upgradeAnalysisDetail"
-              params={{ namespace: item.metadata.namespace, name: item.metadata.name }}
+              params={{ name: item.metadata.name }}
             >
               {item.metadata.name}
             </Link>
           ),
         },
-        'namespace',
         {
           id: 'targetVersion',
           label: 'Target Version',
