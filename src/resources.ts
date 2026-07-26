@@ -8,6 +8,7 @@ const VERSION = 'v1';
 
 export interface UpgradeAnalysisSpec {
   targetVersion: string;
+  scoringProfile?: 'production' | 'non-production';
   scope?: {
     mode: 'all' | 'application';
     excludeNamespaces?: string[];

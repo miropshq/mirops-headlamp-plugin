@@ -406,6 +406,12 @@ export function UpgradeAnalysisDetail() {
               {item.spec?.targetVersion && (
                 <Chip label={`Target: ${item.spec.targetVersion}`} size="small" variant="outlined" />
               )}
+              <Chip
+                label={`Profile: ${item.spec?.scoringProfile ?? 'production'}`}
+                size="small"
+                variant="outlined"
+                color={(item.spec?.scoringProfile ?? 'production') === 'production' ? 'primary' : 'default'}
+              />
               {status.addonsChecked !== undefined && status.addonsChecked > 0 && (
                 <Chip
                   label={`Add-ons: ${status.addonsChecked} checked · ${status.incompatibleAddons ?? 0} incompatible`}

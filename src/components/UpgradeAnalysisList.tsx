@@ -23,7 +23,7 @@ export function UpgradeAnalysisList() {
             startIcon={<Icon icon="mdi:plus" />}
             onClick={() => history.push(Router.createRouteURL('upgradeAnalysisCreate'))}
           >
-            Nuevo análisis
+            New analysis
           </Button>,
         ],
       }}
