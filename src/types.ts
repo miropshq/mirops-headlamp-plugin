@@ -103,7 +103,7 @@ export interface Report {
       health: number;
       capacity: number;
       stability: number;
-      risk: number;
+      compatibility: number;
     };
     ai?: {
       score: number;
@@ -123,7 +123,8 @@ export interface Report {
   metrics: {
     pods: { total: number; notReady: number; restarts: number };
     resources: { cpuPressure: number; memoryPressure: number };
-    stability: { podDelta: number; restartDelta: number };
+    // podDropRatio is a 0–1 ratio of pods lost; scaling up is not penalized.
+    stability: { podDropRatio: number; restartDelta: number };
     compatibility: { deprecatedApis: number; addonIssues: number };
   };
   workloads: {

@@ -569,7 +569,10 @@ export function UpgradeAnalysisDetail() {
                 />
               </Grid>
               <Grid item xs={6} sm={3}>
-                <MetricCard label="Pod Delta" value={report.metrics.stability.podDelta} />
+                <MetricCard
+                  label="Pod Drop Ratio"
+                  value={`${(report.metrics.stability.podDropRatio * 100).toFixed(1)}%`}
+                />
               </Grid>
               <Grid item xs={6} sm={3}>
                 <MetricCard label="Restart Delta" value={report.metrics.stability.restartDelta} />
@@ -595,7 +598,7 @@ export function UpgradeAnalysisDetail() {
                 <MetricCard label="Stability" value={report.scores.base.stability} />
               </Grid>
               <Grid item xs={6} sm={2}>
-                <MetricCard label="Risk" value={report.scores.base.risk} />
+                <MetricCard label="Compatibility" value={report.scores.base.compatibility} />
               </Grid>
               {report.scores.ai && (
                 <Grid item xs={6} sm={2}>
