@@ -437,7 +437,7 @@ export function UpgradeAnalysisCreate() {
                 <TextField label="Bucket" fullWidth value={form.sourceBucket} onChange={e => set('sourceBucket', e.target.value)} />
                 <TextField label="Region" fullWidth value={form.sourceRegion} onChange={e => set('sourceRegion', e.target.value)} />
                 <TextField label="Key" fullWidth value={form.sourceKey} onChange={e => set('sourceKey', e.target.value)} helperText="Object path within the bucket" />
-                <TextField label="Credentials Secret" fullWidth value={form.sourceCredentialsSecret} onChange={e => set('sourceCredentialsSecret', e.target.value)} helperText="Secret with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY" />
+                <TextField label="Credentials Secret (optional)" fullWidth value={form.sourceCredentialsSecret} onChange={e => set('sourceCredentialsSecret', e.target.value)} helperText="Optional — leave empty to use IRSA (the pod's IAM role). Otherwise a Secret with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY." />
               </>
             )}
 
@@ -446,7 +446,7 @@ export function UpgradeAnalysisCreate() {
                 <TextField label="Account Name" fullWidth value={form.sourceAccountName} onChange={e => set('sourceAccountName', e.target.value)} />
                 <TextField label="Container Name" fullWidth value={form.sourceContainerName} onChange={e => set('sourceContainerName', e.target.value)} />
                 <TextField label="Blob Name" fullWidth value={form.sourceBlobName} onChange={e => set('sourceBlobName', e.target.value)} />
-                <TextField label="Credentials Secret" fullWidth value={form.sourceCredentialsSecret} onChange={e => set('sourceCredentialsSecret', e.target.value)} helperText="Secret with AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID" />
+                <TextField label="Credentials Secret (optional)" fullWidth value={form.sourceCredentialsSecret} onChange={e => set('sourceCredentialsSecret', e.target.value)} helperText="Optional — leave empty to use Workload Identity / Managed Identity (UMI). Otherwise a Secret with AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID." />
               </>
             )}
           </AccordionDetails>

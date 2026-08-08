@@ -45,6 +45,11 @@ export interface UpgradeAnalysisStatus {
   incompatibleAddons?: number;
   lastAnalysisTime?: string;
   reportPath?: string;
+  // Report write outcome (operator-set). When reportState === 'failed', the
+  // verdict is still valid but the report body may be unavailable.
+  reportState?: 'written' | 'failed';
+  reportError?: string;
+  reportLocation?: string;
   conditions?: {
     type: string;
     status: string;

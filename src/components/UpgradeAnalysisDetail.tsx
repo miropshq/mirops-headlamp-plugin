@@ -29,6 +29,22 @@ import { DependencyGraph } from './DependencyGraph';
 import { RiskBadge } from './RiskBadge';
 import { ScoreGauge } from './ScoreGauge';
 
+// Viewing a remote report can fail at the proxy with HTTP 502 carrying a JSON
+// body { error, location, detail }. Surface `detail` (the actionable cause)
+// when present; fall back to the raw error message otherwise.
+function extractReportError(e: any): string {
+  const raw = e?.message ?? String(e);
+  try {
+    const body = JSON.parse(raw);
+    if (body && typeof body === 'object' && body.detail) {
+      return body.location ? `${body.detail} (${body.location})` : body.detail;
+    }
+  } catch {
+    /* not JSON — use the raw message */
+  }
+  return raw;
+}
+
 function ConditionAlert({ label, active }: { label: string; active: boolean }) {
   if (!active) return null;
   return <Alert severity="warning" sx={{ mb: 1 }}>{label}</Alert>;
@@ -333,7 +349,7 @@ export function UpgradeAnalysisDetail() {
       `/proxy/reports/${name}.json`;
     ApiProxy.request(path)
       .then((data: Report) => setReport(data))
-      .catch(e => setReportError(e.message))
+      .catch(e => setReportError(extractReportError(e)))
       .finally(() => setReportLoading(false));
   }, [item, name, reportsNamespace]);
 
@@ -444,6 +460,29 @@ export function UpgradeAnalysisDetail() {
             </Box>
           </Box>
         </Box>
+
+        {/* Report write failed in the operator — the verdict above is still
+            valid, but the full report body may be unavailable. */}
+        {status.reportState === 'failed' && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              Report could not be written
+            </Typography>
+            <Typography variant="body2">
+              The analysis ran and the verdict above is valid, but the operator failed to write the
+              report{status.reportLocation ? ` to ${status.reportLocation}` : ''}.
+            </Typography>
+            {status.reportError && (
+              <Typography
+                variant="body2"
+                component="pre"
+                sx={{ mt: 1, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.8rem' }}
+              >
+                {status.reportError}
+              </Typography>
+            )}
+          </Alert>
+        )}
 
         {/* AI Reasoning */}
         {status.aiReasoning && (
