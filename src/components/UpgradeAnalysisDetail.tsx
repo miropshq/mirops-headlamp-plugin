@@ -337,9 +337,29 @@ export function UpgradeAnalysisDetail() {
 
   useEffect(() => {
     if (!item || !name) return;
+    const st = item.status ?? {};
+
+    // Export failed: the operator recorded the error on the CR (banner above). Don't hit the proxy.
+    if (st.reportState === 'failed') {
+      setReport(null);
+      setReportError(null);
+      setReportLoading(false);
+      return;
+    }
+
+    // Only fetch once the operator confirms the report was written. Fetching earlier races the
+    // export (the object isn't in storage yet) and 404s. Older operators don't set reportState, so
+    // fall back to a completed analysis (a decision is present).
+    const ready = st.reportState === 'written' || (!st.reportState && !!st.decision);
+    if (!ready) {
+      setReport(null);
+      setReportError(null);
+      setReportLoading(true); // still analyzing / writing → show the "Generating report…" state
+      return;
+    }
+
     setReportLoading(true);
     setReportError(null);
-
     // The operator serves reports from an in-cluster service that is not
     // reachable from the browser directly. Route the request through the
     // Kubernetes API server service proxy via Headlamp's backend. The CR is
@@ -359,6 +379,12 @@ export function UpgradeAnalysisDetail() {
   const status = item.status ?? {};
   const decision = status.decision ?? 'WARNING';
   const score = status.totalScore ?? 0;
+
+  // Report loading is gated on the operator's reportState (mirrors the fetch effect): pending while
+  // the analysis/export is still running, so the UI shows "Generating report…" instead of racing
+  // the export and flashing a spurious error.
+  const reportReady = status.reportState === 'written' || (!status.reportState && !!status.decision);
+  const reportPending = status.reportState !== 'failed' && !reportReady;
 
   // Re-run the analysis on demand. The operator re-reconciles when the
   // 'mirops.io/refresh' annotation changes (bypassing the resync interval); this
@@ -547,7 +573,16 @@ export function UpgradeAnalysisDetail() {
 
       {/* Report section */}
       <SectionBox title="Analysis Report">
-        {reportLoading && <CircularProgress size={20} />}
+        {reportPending ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={20} />
+            <Typography variant="body2" color="text.secondary">
+              Generating report…
+            </Typography>
+          </Box>
+        ) : (
+          reportLoading && <CircularProgress size={20} />
+        )}
         {reportError && (
           <Alert severity="warning">
             Could not load report: {reportError}
