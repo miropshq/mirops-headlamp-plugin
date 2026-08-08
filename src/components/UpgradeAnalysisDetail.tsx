@@ -337,40 +337,55 @@ export function UpgradeAnalysisDetail() {
 
   useEffect(() => {
     if (!item || !name) return;
-    const st = item.status ?? {};
 
-    // Export failed: the operator recorded the error on the CR (banner above). Don't hit the proxy.
-    if (st.reportState === 'failed') {
-      setReport(null);
-      setReportError(null);
-      setReportLoading(false);
-      return;
-    }
+    // Poll the report endpoint rather than trusting a single read: right after an analysis the
+    // export may still be in flight (the object isn't in storage yet → 404) and the CR watch can
+    // lag, so a one-shot fetch gets stuck on "Generating…". Retry quietly until the report is
+    // available; only surface an error after the operator reports a hard failure or retries run out.
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let attempts = 0;
+    const maxAttempts = 20; // ~1 min at 3s
 
-    // Only fetch once the operator confirms the report was written. Fetching earlier races the
-    // export (the object isn't in storage yet) and 404s. Older operators don't set reportState, so
-    // fall back to a completed analysis (a decision is present).
-    const ready = st.reportState === 'written' || (!st.reportState && !!st.decision);
-    if (!ready) {
-      setReport(null);
-      setReportError(null);
-      setReportLoading(true); // still analyzing / writing → show the "Generating report…" state
-      return;
-    }
-
-    setReportLoading(true);
-    setReportError(null);
-    // The operator serves reports from an in-cluster service that is not
-    // reachable from the browser directly. Route the request through the
-    // Kubernetes API server service proxy via Headlamp's backend. The CR is
-    // cluster-scoped, so the Service namespace is discovered at runtime.
+    // The operator serves reports from an in-cluster service not reachable from the browser
+    // directly; route through the Kubernetes API server service proxy via Headlamp's backend.
     const path =
       `/api/v1/namespaces/${reportsNamespace}/services/${REPORTS_SERVICE_NAME}:8084` +
       `/proxy/reports/${name}.json`;
-    ApiProxy.request(path)
-      .then((data: Report) => setReport(data))
-      .catch(e => setReportError(extractReportError(e)))
-      .finally(() => setReportLoading(false));
+
+    setReportLoading(true);
+    setReportError(null);
+    setReport(null);
+
+    const attempt = () => {
+      // Hard failure recorded by the operator (banner above): stop retrying.
+      if ((item.status ?? {}).reportState === 'failed') {
+        if (!cancelled) setReportLoading(false);
+        return;
+      }
+      ApiProxy.request(path)
+        .then((data: Report) => {
+          if (cancelled) return;
+          setReport(data);
+          setReportLoading(false);
+        })
+        .catch(e => {
+          if (cancelled) return;
+          attempts += 1;
+          if (attempts >= maxAttempts) {
+            setReportError(extractReportError(e));
+            setReportLoading(false);
+          } else {
+            timer = setTimeout(attempt, 3000); // report not written yet — keep waiting
+          }
+        });
+    };
+    attempt();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [item, name, reportsNamespace]);
 
   if (error) return <Alert severity="error">{String(error)}</Alert>;
@@ -380,11 +395,9 @@ export function UpgradeAnalysisDetail() {
   const decision = status.decision ?? 'WARNING';
   const score = status.totalScore ?? 0;
 
-  // Report loading is gated on the operator's reportState (mirrors the fetch effect): pending while
-  // the analysis/export is still running, so the UI shows "Generating report…" instead of racing
-  // the export and flashing a spurious error.
-  const reportReady = status.reportState === 'written' || (!status.reportState && !!status.decision);
-  const reportPending = status.reportState !== 'failed' && !reportReady;
+  // "Generating report…" while the report is still being polled (the export may be in flight); it
+  // resolves to the report or an error once polling settles.
+  const reportPending = reportLoading && !report && !reportError;
 
   // Re-run the analysis on demand. The operator re-reconciles when the
   // 'mirops.io/refresh' annotation changes (bypassing the resync interval); this
@@ -573,15 +586,13 @@ export function UpgradeAnalysisDetail() {
 
       {/* Report section */}
       <SectionBox title="Analysis Report">
-        {reportPending ? (
+        {reportPending && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={20} />
             <Typography variant="body2" color="text.secondary">
               Generating report…
             </Typography>
           </Box>
-        ) : (
-          reportLoading && <CircularProgress size={20} />
         )}
         {reportError && (
           <Alert severity="warning">
