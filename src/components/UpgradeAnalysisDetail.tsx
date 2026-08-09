@@ -44,11 +44,6 @@ function extractReportError(e: any): string {
   return raw;
 }
 
-function ConditionAlert({ label, active }: { label: string; active: boolean }) {
-  if (!active) return null;
-  return <Alert severity="warning" sx={{ mb: 1 }}>{label}</Alert>;
-}
-
 function MetricCard({ label, value }: { label: string; value: string | number }) {
   return (
     <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
@@ -366,6 +361,59 @@ function VerdictBanner({
   );
 }
 
+// buildWarnings gathers the non-blocking issues to show in Findings. Blockers come straight from
+// report.decision.blockers; warnings are the "attention, but not a hard stop" items.
+function buildWarnings(report: Report, score: number, safeThreshold: number): string[] {
+  const warnings: string[] = [];
+  const blocked = (report.decision.blockers?.length ?? 0) > 0;
+  // report.reason describes the top non-blocking issue (e.g. pods not ready). Show it when the
+  // cluster is unstable but that instability isn't already listed as a hard blocker.
+  if (report.conditions.unstableCluster && !blocked && report.reason) {
+    warnings.push(report.reason);
+  }
+  if (score < safeThreshold) {
+    warnings.push(`Readiness score ${score} is below the SAFE bar (${safeThreshold})`);
+  }
+  return warnings;
+}
+
+// Findings is the single "what's wrong" block at the top of the Analysis Report: blockers (must fix)
+// and warnings (don't block), listed for every verdict — so the report is informative whether the
+// upgrade is blocked, not recommended, or clear. The data sections below are unchanged.
+function Findings({ blockers, warnings }: { blockers: string[]; warnings: string[] }) {
+  const clean = blockers.length === 0 && warnings.length === 0;
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Findings
+      </Typography>
+      {clean && (
+        <Alert severity="success">No issues found — the cluster is ready to upgrade.</Alert>
+      )}
+      {blockers.length > 0 && (
+        <Alert severity="error" sx={{ mb: warnings.length ? 1.5 : 0 }}>
+          <AlertTitle>Blockers — must be fixed first</AlertTitle>
+          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+            {blockers.map((b, i) => (
+              <li key={i}>{b}</li>
+            ))}
+          </Box>
+        </Alert>
+      )}
+      {warnings.length > 0 && (
+        <Alert severity="warning">
+          <AlertTitle>Warnings — don&apos;t block the upgrade</AlertTitle>
+          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+            {warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </Box>
+        </Alert>
+      )}
+    </Box>
+  );
+}
+
 export function UpgradeAnalysisDetail() {
   const { name } = useParams<{ name: string }>();
   const [item, error] = UpgradeAnalysis.useGet(name);
@@ -647,31 +695,13 @@ export function UpgradeAnalysisDetail() {
         )}
         {report && (
           <>
-            {/* Why blocked — the red verdict comes with its explicit causes, so
-                the headline never contradicts the detail. Falls back to the
-                single-line reason when blockers is empty. */}
-            {report.decision.level === 'CRITICAL' && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                <AlertTitle>Upgrade blocked</AlertTitle>
-                {report.decision.blockers?.length ? (
-                  <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
-                    {report.decision.blockers.map(b => (
-                      <li key={b}>{b}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  report.reason
-                )}
-              </Alert>
-            )}
-
-            {/* Conditions warnings */}
-            <Box sx={{ mb: 2 }}>
-              <ConditionAlert label="PDB is blocking upgrades" active={report.conditions.pdbBlocking} />
-              <ConditionAlert label="High CPU pressure detected" active={report.conditions.highCpuPressure} />
-              <ConditionAlert label="High memory pressure detected" active={report.conditions.highMemoryPressure} />
-              <ConditionAlert label="Cluster is unstable" active={report.conditions.unstableCluster} />
-            </Box>
+            {/* One consolidated Findings block: blockers (must fix) and warnings (don't block),
+                for every verdict — so the report always says what's wrong and whether it stops the
+                upgrade. The data sections below (metrics, breakdown, add-ons, risk, graph) follow. */}
+            <Findings
+              blockers={report.decision.blockers ?? []}
+              warnings={buildWarnings(report, score, safeThreshold)}
+            />
 
             {/* Metrics grid */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
