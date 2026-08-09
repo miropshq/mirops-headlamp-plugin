@@ -23,11 +23,10 @@ import React, { useEffect, useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
 import { RemediationPlan, UpgradeAnalysis } from '../resources';
 import { riskSeverity } from '../riskColor';
-import { AddonStatus, NamespaceRisk, Report } from '../types';
-import { DecisionChip } from './DecisionChip';
+import { AddonStatus, Decision, NamespaceRisk, Report } from '../types';
 import { DependencyGraph } from './DependencyGraph';
 import { RiskBadge } from './RiskBadge';
-import { ScoreGauge } from './ScoreGauge';
+import { HealthBand,ScoreGauge } from './ScoreGauge';
 
 // Viewing a remote report can fail at the proxy with HTTP 502 carrying a JSON
 // body { error, location, detail }. Surface `detail` (the actionable cause)
@@ -322,6 +321,51 @@ function WorkloadSection<T extends WorkloadRow>({
   );
 }
 
+// VerdictBanner is the upgrade go/no-go — a separate axis from the readiness gauge. Its color is the
+// semaphore (allowed / not recommended / blocked); the health gauge stays on its own health color
+// even here. The bridge line states plainly that the two describe different things, so a healthy
+// score beside a blocked verdict never reads as a contradiction. The detailed blockers/conditions
+// live in the report section below.
+function VerdictBanner({
+  decision,
+  score,
+  healthBand,
+  reason,
+}: {
+  decision: Decision;
+  score: number;
+  healthBand: HealthBand;
+  reason?: string;
+}) {
+  const cfg = {
+    SAFE: { sev: 'success' as const, title: 'Upgrade allowed' },
+    WARNING: { sev: 'warning' as const, title: 'Not recommended' },
+    CRITICAL: { sev: 'error' as const, title: 'Upgrade blocked' },
+    ERROR: { sev: 'info' as const, title: 'Analysis error' },
+  }[decision];
+
+  const bridge =
+    decision === 'SAFE'
+      ? 'Cluster is healthy and nothing blocks the upgrade — ready to go.'
+      : decision === 'WARNING'
+        ? `Cluster health is ${score}${healthBand === 'SAFE' ? ' (good)' : ''}, but the cluster is unstable — not blocked, but stabilize it before upgrading.`
+        : `Cluster health (${score}) is a separate reading — a blocker prevents the upgrade until it's fixed (see below).`;
+
+  return (
+    <Alert severity={cfg.sev} sx={{ mb: 1.5 }}>
+      <AlertTitle sx={{ fontWeight: 700, mb: 0.5 }}>{cfg.title}</AlertTitle>
+      {decision !== 'SAFE' && reason && (
+        <Typography variant="body2" sx={{ mb: 0.5 }}>
+          {reason}
+        </Typography>
+      )}
+      <Typography variant="body2" sx={{ opacity: 0.85 }}>
+        {bridge}
+      </Typography>
+    </Alert>
+  );
+}
+
 export function UpgradeAnalysisDetail() {
   const { name } = useParams<{ name: string }>();
   const [item, error] = UpgradeAnalysis.useGet(name);
@@ -395,6 +439,11 @@ export function UpgradeAnalysisDetail() {
   const decision = status.decision ?? 'WARNING';
   const score = status.totalScore ?? 0;
 
+  // Health band = the score on its own axis (SAFE ≥ profile threshold, else FAIR, then AT_RISK). It
+  // colors the gauge and is independent of the decision/verdict, so the two never contradict.
+  const safeThreshold = (item.spec?.scoringProfile ?? 'production') === 'production' ? 90 : 85;
+  const healthBand: HealthBand = score >= safeThreshold ? 'SAFE' : score >= 60 ? 'FAIR' : 'AT_RISK';
+
   // "Generating report…" while the report is still being polled (the export may be in flight); it
   // resolves to the report or an error once polling settles.
   const reportPending = reportLoading && !report && !reportError;
@@ -454,10 +503,10 @@ export function UpgradeAnalysisDetail() {
       {/* Header */}
       <SectionBox title={`Upgrade Analysis: ${name}`}>
         <Box sx={{ display: 'flex', gap: 4, alignItems: 'flex-start', flexWrap: 'wrap', mb: 2 }}>
-          <ScoreGauge score={score} decision={decision} />
+          <ScoreGauge score={score} band={healthBand} />
           <Box sx={{ flex: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-              <DecisionChip decision={decision} />
+            <VerdictBanner decision={decision} score={score} healthBand={healthBand} reason={status.reason} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexWrap: 'wrap' }}>
               {item.spec?.targetVersion && (
                 <Chip label={`Target: ${item.spec.targetVersion}`} size="small" variant="outlined" />
               )}
@@ -476,9 +525,6 @@ export function UpgradeAnalysisDetail() {
                 />
               )}
             </Box>
-            {status.reason && (
-              <Typography variant="body2" color="text.secondary">{status.reason}</Typography>
-            )}
             {remediationRef && (
               <Box sx={{ mt: 1 }}>
                 <Link
