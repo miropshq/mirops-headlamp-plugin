@@ -15,8 +15,18 @@ const COLOR_MAP: Record<Decision, 'success' | 'warning' | 'error' | 'default'> =
   ERROR: 'default',
 };
 
+// The chip shows the upgrade verdict (the actionable go/no-go), not the raw level, so it matches the
+// detail view's verdict banner. SAFE = allowed, WARNING = not recommended (proceed at your own risk,
+// not blocked), CRITICAL = blocked.
+const LABEL_MAP: Record<Decision, string> = {
+  SAFE: 'Allowed',
+  WARNING: 'Not recommended',
+  CRITICAL: 'Blocked',
+  ERROR: 'Config error',
+};
+
 export function DecisionChip({ decision }: Props) {
-  const label = decision === 'ERROR' ? 'CONFIG ERROR' : decision;
+  const label = LABEL_MAP[decision];
   return (
     <Chip
       label={label}
