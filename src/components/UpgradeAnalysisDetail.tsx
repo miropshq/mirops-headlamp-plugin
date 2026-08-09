@@ -350,11 +350,11 @@ function VerdictBanner({
     <Alert severity={cfg.sev} sx={{ mb: 1.5 }}>
       <AlertTitle sx={{ fontWeight: 700, mb: 0.5 }}>{cfg.title}</AlertTitle>
       {decision !== 'SAFE' && reason && (
-        <Typography variant="body2" sx={{ mb: 0.5 }}>
+        <Typography variant="body2" sx={{ mb: 0.5, color: 'text.primary' }}>
           {reason}
         </Typography>
       )}
-      <Typography variant="body2" sx={{ opacity: 0.85 }}>
+      <Typography variant="body2" sx={{ color: 'text.primary' }}>
         {bridge}
       </Typography>
     </Alert>
@@ -393,7 +393,7 @@ function Findings({ blockers, warnings }: { blockers: string[]; warnings: string
       {blockers.length > 0 && (
         <Alert severity="error" sx={{ mb: warnings.length ? 1.5 : 0 }}>
           <AlertTitle>Blockers — must be fixed first</AlertTitle>
-          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+          <Box component="ul" sx={{ m: 0, pl: 2.5, color: 'text.primary' }}>
             {blockers.map((b, i) => (
               <li key={i}>{b}</li>
             ))}
@@ -402,8 +402,8 @@ function Findings({ blockers, warnings }: { blockers: string[]; warnings: string
       )}
       {warnings.length > 0 && (
         <Alert severity="warning">
-          <AlertTitle>Warnings — don&apos;t block the upgrade</AlertTitle>
-          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+          <AlertTitle>Warnings — won&apos;t block the upgrade</AlertTitle>
+          <Box component="ul" sx={{ m: 0, pl: 2.5, color: 'text.primary' }}>
             {warnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
@@ -679,7 +679,7 @@ export function UpgradeAnalysisDetail() {
       </SectionBox>
 
       {/* Report section */}
-      <SectionBox title="Analysis Report">
+      <SectionBox>
         {reportPending && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={20} />
