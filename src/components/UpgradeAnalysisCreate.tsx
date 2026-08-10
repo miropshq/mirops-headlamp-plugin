@@ -443,7 +443,7 @@ export function UpgradeAnalysisCreate() {
 
             {form.sourceType === 'blob' && (
               <>
-                <TextField label="Account Name" fullWidth value={form.sourceAccountName} onChange={e => set('sourceAccountName', e.target.value)} />
+                <TextField label="Storage Account Name" fullWidth value={form.sourceAccountName} onChange={e => set('sourceAccountName', e.target.value)} helperText="The storage account name (e.g. miropsreports)" />
                 <TextField label="Container Name" fullWidth value={form.sourceContainerName} onChange={e => set('sourceContainerName', e.target.value)} />
                 <TextField label="Blob Name" fullWidth value={form.sourceBlobName} onChange={e => set('sourceBlobName', e.target.value)} />
                 <TextField label="Credentials Secret (optional)" fullWidth value={form.sourceCredentialsSecret} onChange={e => set('sourceCredentialsSecret', e.target.value)} helperText="Optional — leave empty to use Workload Identity / Managed Identity (UMI). Otherwise a Secret with AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID." />
