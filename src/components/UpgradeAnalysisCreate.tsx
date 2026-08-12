@@ -403,10 +403,10 @@ export function UpgradeAnalysisCreate() {
                 label="Type"
                 onChange={e => set('sourceType', e.target.value as any)}
               >
-                <MenuItem value="file">File (default)</MenuItem>
+                <MenuItem value="file">File Pod (default)</MenuItem>
                 <MenuItem value="s3">S3</MenuItem>
                 <MenuItem value="blob">Azure Blob</MenuItem>
-                <MenuItem value="pvc">PVC (on-prem)</MenuItem>
+                <MenuItem value="pvc">PVC</MenuItem>
               </Select>
             </FormControl>
 
