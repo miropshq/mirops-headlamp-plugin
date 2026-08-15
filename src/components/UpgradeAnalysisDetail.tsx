@@ -13,11 +13,13 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
+import Tab from '@mui/material/Tab';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import Tabs from '@mui/material/Tabs';
 import Typography from '@mui/material/Typography';
 import React, { useEffect, useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
@@ -59,14 +61,16 @@ const ADDON_STATUS_COLOR: Record<AddonStatus, 'success' | 'error' | 'default'> =
   unknown: 'default',
 };
 
-function AddonCompatibilityTable({ report }: { report: Report }) {
+function AddonCompatibilityTable({ report, embedded }: { report: Report; embedded?: boolean }) {
   const addons = report.addons ?? [];
   if (addons.length === 0) return null;
   return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Add-on Compatibility
-      </Typography>
+    <Box sx={{ mb: embedded ? 0 : 3 }}>
+      {!embedded && (
+        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+          Add-on Compatibility
+        </Typography>
+      )}
       <Table size="small">
         <TableHead>
           <TableRow>
@@ -137,7 +141,13 @@ function useReportsNamespace(): string {
   return namespace;
 }
 
-function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] }) {
+function NamespaceRiskHeatmap({
+  byNamespace,
+  embedded,
+}: {
+  byNamespace: NamespaceRisk[];
+  embedded?: boolean;
+}) {
   const history = useHistory();
   if (byNamespace.length === 0) return null;
   const sorted = [...byNamespace].sort((a, b) => {
@@ -148,10 +158,12 @@ function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] })
     return b.risk - a.risk;
   });
   return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Namespace Risk
-      </Typography>
+    <Box sx={{ mb: embedded ? 0 : 3 }}>
+      {!embedded && (
+        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+          Namespace Risk
+        </Typography>
+      )}
       <Grid container spacing={2}>
         {sorted.map(ns => {
           const isClusterScoped = ns.namespace === CLUSTER_SCOPED_BUCKET;
@@ -410,6 +422,166 @@ function Findings({ blockers, warnings }: { blockers: string[]; warnings: string
           </Box>
         </Alert>
       )}
+    </Box>
+  );
+}
+
+// GraphEmptyState is what the Dependency Graph tab shows when there are no dependency chains (no
+// edges). Most add-ons are isolated, so unless something actually depends on an at-risk component
+// (a Lost PVC, a down node, istio sidecars, a TLS ingress → workloads) there is no blast radius to
+// draw. Rather than a lone node in an empty canvas, explain why and point back to the add-on table.
+function GraphEmptyState({
+  hasAddonIssue,
+  onGoToAddons,
+}: {
+  hasAddonIssue: boolean;
+  onGoToAddons: () => void;
+}) {
+  return (
+    <Box sx={{ textAlign: 'center', py: 6, px: 2 }}>
+      <Box
+        component="svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        sx={{ width: 44, height: 44, color: 'text.disabled', mb: 1 }}
+      >
+        <path d="M9 17H7A5 5 0 0 1 7 7" />
+        <path d="M15 7h2a5 5 0 0 1 4 8" />
+        <line x1="8" y1="12" x2="12" y2="12" />
+        <line x1="2" y1="2" x2="22" y2="22" />
+      </Box>
+      <Typography variant="subtitle1" fontWeight={600} color="text.secondary" gutterBottom>
+        No dependency chains
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 520, mx: 'auto', mb: 2 }}>
+        Nothing in this cluster depends on the at-risk components, so there&apos;s no blast radius to
+        draw.{hasAddonIssue && ' The at-risk add-on is listed under Add-on Compatibility.'}
+      </Typography>
+      {hasAddonIssue && (
+        <Button variant="contained" size="small" onClick={onGoToAddons}>
+          Go to Add-on Compatibility
+        </Button>
+      )}
+    </Box>
+  );
+}
+
+// RiskCompatibilityTabs collapses the three lenses on the logical mirror — Add-on Compatibility,
+// Namespace Risk, and the Dependency Graph — into one tabbed section (switch, don't scroll through
+// three stacked blocks). It opens context-aware: on the add-on tab when something is incompatible
+// (a hard blocker), otherwise namespace risk; never the graph, which is often empty. Each tab
+// carries a count badge. The graph tab is conditional — dimmed, and clicking it shows a "no
+// dependency chains" empty-state — whenever the graph has no edges.
+function RiskCompatibilityTabs({ report }: { report: Report }) {
+  const addons = report.addons ?? [];
+  const byNamespace = report.risk?.byNamespace ?? [];
+  const graph = report.graph;
+
+  const hasAddons = addons.length > 0;
+  const hasNamespaces = byNamespace.length > 0;
+  const hasGraph = !!graph && graph.nodes.length > 0;
+
+  const incompatibleCount = addons.filter(a => a.status === 'incompatible').length;
+  const atRiskNamespaces = byNamespace.filter(n => n.atRisk > 0).length;
+  const chainCount = graph?.edges?.length ?? 0;
+  const hasChains = chainCount > 0;
+
+  // Context-aware default: land on whatever is wrong. Incompatible add-ons first (a hard blocker),
+  // then namespace risk; never default to the graph.
+  const defaultTab: 'addon' | 'ns' | 'graph' =
+    incompatibleCount > 0 && hasAddons
+      ? 'addon'
+      : hasNamespaces
+        ? 'ns'
+        : hasAddons
+          ? 'addon'
+          : 'graph';
+  const [tab, setTab] = useState<'addon' | 'ns' | 'graph'>(defaultTab);
+
+  if (!hasAddons && !hasNamespaces && !hasGraph) return null;
+
+  const chipSx = { ml: 0.75, height: 18, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } };
+
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Risk &amp; Compatibility
+      </Typography>
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ borderBottom: 1, borderColor: 'divider', minHeight: 40 }}
+      >
+        {hasAddons && (
+          <Tab
+            value="addon"
+            sx={{ minHeight: 40, textTransform: 'none' }}
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                Add-on Compatibility
+                {incompatibleCount > 0 && (
+                  <Chip label={incompatibleCount} size="small" color="error" sx={chipSx} />
+                )}
+              </Box>
+            }
+          />
+        )}
+        {hasNamespaces && (
+          <Tab
+            value="ns"
+            sx={{ minHeight: 40, textTransform: 'none' }}
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                Namespace Risk
+                {atRiskNamespaces > 0 && (
+                  <Chip label={atRiskNamespaces} size="small" color="warning" sx={chipSx} />
+                )}
+              </Box>
+            }
+          />
+        )}
+        {hasGraph && (
+          <Tab
+            value="graph"
+            // Dimmed (not disabled) when there are no chains, so it stays clickable and can explain
+            // why it's empty instead of just being unavailable.
+            sx={{ minHeight: 40, textTransform: 'none', opacity: hasChains ? 1 : 0.55 }}
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                Dependency Graph
+                <Chip
+                  label={`${chainCount} ${chainCount === 1 ? 'chain' : 'chains'}`}
+                  size="small"
+                  variant="outlined"
+                  sx={chipSx}
+                />
+              </Box>
+            }
+          />
+        )}
+      </Tabs>
+      <Box sx={{ pt: 2 }}>
+        {tab === 'addon' && hasAddons && <AddonCompatibilityTable report={report} embedded />}
+        {tab === 'ns' && hasNamespaces && (
+          <NamespaceRiskHeatmap byNamespace={byNamespace} embedded />
+        )}
+        {tab === 'graph' &&
+          hasGraph &&
+          (hasChains ? (
+            <DependencyGraph graph={graph!} />
+          ) : (
+            <GraphEmptyState
+              hasAddonIssue={incompatibleCount > 0}
+              onGoToAddons={() => setTab('addon')}
+            />
+          ))}
+      </Box>
     </Box>
   );
 }
@@ -770,12 +942,9 @@ export function UpgradeAnalysisDetail() {
 
             <Divider sx={{ mb: 3 }} />
 
-            {/* Logical mirror: add-on compatibility, namespace risk, dependency graph */}
-            <AddonCompatibilityTable report={report} />
-            {report.risk?.byNamespace && (
-              <NamespaceRiskHeatmap byNamespace={report.risk.byNamespace} />
-            )}
-            {report.graph && <DependencyGraph graph={report.graph} />}
+            {/* Logical mirror — one tabbed section (add-on compatibility · namespace risk ·
+                dependency graph) with a context-aware default and a conditional graph tab. */}
+            <RiskCompatibilityTabs report={report} />
 
             {/* Workloads */}
             {report.workloads.nodes.length > 0 && (
