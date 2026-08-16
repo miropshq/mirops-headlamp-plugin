@@ -68,11 +68,15 @@ function filterByRisk(graph: ReportGraph, showAll: boolean, minRisk: number): Vi
 
 function buildNodes(visible: VisibleGraph): Node[] {
   const byColumn = new Map<number, GraphNode[]>();
+  // Count names so a namespace is shown only when a name is ambiguous (appears on more than one
+  // visible node). Unique names render clean — just the name — with no namespace at all.
+  const nameCounts = new Map<string, number>();
   for (const n of visible.nodes) {
     const col = TYPE_COLUMN[n.type] ?? 4;
     const list = byColumn.get(col) ?? [];
     list.push(n);
     byColumn.set(col, list);
+    nameCounts.set(n.name, (nameCounts.get(n.name) ?? 0) + 1);
   }
 
   const rfNodes: Node[] = [];
@@ -84,17 +88,24 @@ function buildNodes(visible: VisibleGraph): Node[] {
     list.forEach((n, row) => {
       const dimmed = visible.dimmedIds.has(n.id);
       const { level, color } = riskSeverity(n.risk);
+      // Only disambiguate with the namespace when this name isn't unique among visible nodes.
+      const showNamespace = !!n.namespace && (nameCounts.get(n.name) ?? 0) > 1;
       rfNodes.push({
         id: n.id,
         position: { x: col * COLUMN_GAP, y: row * ROW_GAP },
         connectable: false,
         data: {
           label: (
-            <div title={`${n.kind} · ${level} risk${n.status ? ` · ${n.status}` : ''}`}>
+            <div title={`${n.kind} · risk ${n.risk} (${level})${n.status ? ` · ${n.status}` : ''}`}>
               <strong>{n.name}</strong>
+              {/* Namespace only when the name is ambiguous — two same-named workloads (e.g. app in
+                  test4 vs test5) need it to be told apart; unique names stay clean, like the design. */}
+              {showNamespace && (
+                <span style={{ fontSize: 10, opacity: 0.7 }}> · {n.namespace}</span>
+              )}
+              {/* Risk value is the point of the graph — show the number, then the severity word. */}
               <div style={{ fontSize: 10, opacity: 0.85 }}>
-                {n.kind}
-                {n.namespace ? ` · ${n.namespace}` : ''} · {level}
+                {n.kind} · <strong>{n.risk}</strong> {level}
               </div>
             </div>
           ),
@@ -200,8 +211,8 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
         </Typography>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-        Nodes colored by risk severity (None→Critical); gray dashed nodes are
-        healthy direct neighbors shown for context; edges labeled by dependency type.
+        Each node shows its risk value (0–100) and severity, colored None→Critical; gray
+        dashed nodes are healthy direct neighbors shown for context; edges labeled by dependency type.
       </Typography>
       <Box sx={{ height: 520, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
         <ReactFlow
