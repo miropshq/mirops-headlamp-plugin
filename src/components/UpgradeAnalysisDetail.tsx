@@ -11,8 +11,10 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
+import Switch from '@mui/material/Switch';
 import Tab from '@mui/material/Tab';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -422,6 +424,223 @@ function Findings({ blockers, warnings }: { blockers: string[]; warnings: string
           </Box>
         </Alert>
       )}
+    </Box>
+  );
+}
+
+const PVC_PHASE_COLOR: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
+  Bound: 'success',
+  Pending: 'warning',
+  Lost: 'error',
+};
+
+// PVCTable lists every PersistentVolumeClaim with its phase, so a Lost or Pending claim is visible
+// in the data section (not only as a graph node). Lost/Pending are the ones that block or warn on
+// an upgrade — a drained node can't reattach storage that isn't Bound.
+function PVCTable({ rows }: { rows: NonNullable<Report['workloads']['pvcs']> }) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Persistent Volume Claims
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Namespace</TableCell>
+            <TableCell>Name</TableCell>
+            <TableCell>Storage Class</TableCell>
+            <TableCell>Status</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((p, i) => (
+            <TableRow key={i}>
+              <TableCell>
+                <Link routeName="namespace" params={{ name: p.namespace }}>
+                  {p.namespace}
+                </Link>
+              </TableCell>
+              <TableCell>
+                <Link
+                  routeName="persistentVolumeClaim"
+                  params={{ namespace: p.namespace, name: p.name }}
+                >
+                  {p.name}
+                </Link>
+              </TableCell>
+              <TableCell>{p.storageClass || '—'}</TableCell>
+              <TableCell>
+                <Chip
+                  label={p.phase}
+                  size="small"
+                  color={PVC_PHASE_COLOR[p.phase] ?? 'default'}
+                  variant={p.phase === 'Bound' ? 'outlined' : 'filled'}
+                />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
+  );
+}
+
+// WorkloadsData is the report's raw workload inventory (nodes, deployments, PVCs, deprecated APIs).
+// A "Only show problems" toggle — on by default — hides the healthy rows that otherwise dominate
+// the tables (Ready nodes, fully-ready deployments, Bound PVCs), so what needs attention isn't
+// buried. StatefulSets/DaemonSets/Jobs/Deprecated APIs already carry only problems from the
+// operator, so the toggle doesn't touch them.
+function WorkloadsData({ report }: { report: Report }) {
+  const [onlyProblems, setOnlyProblems] = useState(true);
+  const w = report.workloads;
+  const nodes = onlyProblems ? w.nodes.filter(n => n.status !== 'Ready') : w.nodes;
+  const deployments = onlyProblems
+    ? w.deployments.filter(d => d.readyReplicas < d.desiredReplicas)
+    : w.deployments;
+  const pvcs = onlyProblems ? (w.pvcs ?? []).filter(p => p.phase !== 'Bound') : w.pvcs ?? [];
+  const barePods = onlyProblems
+    ? (w.barePods ?? []).filter(p => p.status !== 'Running')
+    : w.barePods ?? [];
+
+  return (
+    <>
+      <Box
+        sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}
+      >
+        <Typography variant="subtitle1" fontWeight={600}>
+          Workloads
+        </Typography>
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={onlyProblems}
+              onChange={e => setOnlyProblems(e.target.checked)}
+            />
+          }
+          label={<Typography variant="body2">Only show problems</Typography>}
+        />
+      </Box>
+
+      {nodes.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+            Nodes
+          </Typography>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {nodes.map(n => (
+                <TableRow key={n.name}>
+                  <TableCell>
+                    <Link routeName="node" params={{ name: n.name }}>
+                      {n.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell>{n.status}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
+      )}
+
+      <WorkloadSection
+        title="Deployments"
+        routeName="Deployment"
+        rows={deployments}
+        status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
+      />
+      <WorkloadSection
+        title="StatefulSets"
+        routeName="StatefulSet"
+        rows={w.statefulsets}
+        status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
+      />
+      <WorkloadSection
+        title="DaemonSets"
+        routeName="DaemonSet"
+        rows={w.daemonsets}
+        status={d => `${d.numberUnavailable} unavailable`}
+      />
+      <WorkloadSection
+        title="Jobs"
+        routeName="Job"
+        rows={w.jobs}
+        status={j => `${j.active} active`}
+      />
+      <BarePodsTable rows={barePods} />
+      <PVCTable rows={pvcs} />
+      {w.deprecatedApis && w.deprecatedApis.length > 0 && (
+        <WorkloadTable
+          title="Deprecated APIs"
+          rows={w.deprecatedApis}
+          columns={[
+            { label: 'Group', key: 'group' },
+            { label: 'Version', key: 'version' },
+            { label: 'Resource', key: 'resource' },
+            { label: 'Removed In', key: 'removedIn' },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+const BARE_POD_STATUS_COLOR: Record<string, 'success' | 'error' | 'default'> = {
+  Running: 'success',
+  Down: 'error',
+};
+
+// BarePodsTable lists standalone pods (no owning workload — `kubectl run`, raw Pod manifests).
+// They aren't covered by any Deployment/StatefulSet row, so a failing bare pod would otherwise be
+// invisible in the data section. A "Down" (not-ready) one is the case that matters for an upgrade.
+function BarePodsTable({ rows }: { rows: NonNullable<Report['workloads']['barePods']> }) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Standalone Pods
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Namespace</TableCell>
+            <TableCell>Name</TableCell>
+            <TableCell>Status</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((p, i) => (
+            <TableRow key={i}>
+              <TableCell>
+                <Link routeName="namespace" params={{ name: p.namespace }}>
+                  {p.namespace}
+                </Link>
+              </TableCell>
+              <TableCell>
+                <Link routeName="Pod" params={{ namespace: p.namespace, name: p.name }}>
+                  {p.name}
+                </Link>
+              </TableCell>
+              <TableCell>
+                <Chip
+                  label={p.status}
+                  size="small"
+                  color={BARE_POD_STATUS_COLOR[p.status] ?? 'default'}
+                  variant={p.status === 'Running' ? 'outlined' : 'filled'}
+                />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </Box>
   );
 }
@@ -946,66 +1165,8 @@ export function UpgradeAnalysisDetail() {
                 dependency graph) with a context-aware default and a conditional graph tab. */}
             <RiskCompatibilityTabs report={report} />
 
-            {/* Workloads */}
-            {report.workloads.nodes.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>Nodes</Typography>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {report.workloads.nodes.map(n => (
-                      <TableRow key={n.name}>
-                        <TableCell>
-                          <Link routeName="node" params={{ name: n.name }}>{n.name}</Link>
-                        </TableCell>
-                        <TableCell>{n.status}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Box>
-            )}
-            <WorkloadSection
-              title="Deployments"
-              routeName="Deployment"
-              rows={report.workloads.deployments}
-              status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
-            />
-            <WorkloadSection
-              title="StatefulSets"
-              routeName="StatefulSet"
-              rows={report.workloads.statefulsets}
-              status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
-            />
-            <WorkloadSection
-              title="DaemonSets"
-              routeName="DaemonSet"
-              rows={report.workloads.daemonsets}
-              status={d => `${d.numberUnavailable} unavailable`}
-            />
-            <WorkloadSection
-              title="Jobs"
-              routeName="Job"
-              rows={report.workloads.jobs}
-              status={j => `${j.active} active`}
-            />
-            {report.workloads.deprecatedApis && report.workloads.deprecatedApis.length > 0 && (
-              <WorkloadTable
-                title="Deprecated APIs"
-                rows={report.workloads.deprecatedApis}
-                columns={[
-                  { label: 'Group', key: 'group' },
-                  { label: 'Version', key: 'version' },
-                  { label: 'Resource', key: 'resource' },
-                  { label: 'Removed In', key: 'removedIn' },
-                ]}
-              />
-            )}
+            {/* Workloads — raw inventory with an "only problems" toggle */}
+            <WorkloadsData report={report} />
 
             {/* Issues */}
             {report.issues && report.issues.length > 0 && (

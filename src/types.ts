@@ -160,6 +160,8 @@ export interface Report {
       pods?: { name: string; reason?: string; restarts: number }[];
     }[];
     pdbs?: { namespace: string; name: string }[];
+    pvcs?: { namespace: string; name: string; storageClass?: string; phase: string }[];
+    barePods?: { namespace: string; name: string; status: string }[];
     deprecatedApis?: {
       group: string;
       version: string;
