@@ -64,8 +64,8 @@ function MetricCard({ label, value }: { label: string; value: string | number })
 const RESOURCE_PAGE_SIZE = 12;
 
 // A single Deployment can own dozens of failing pods (a 15-replica CrashLoopBackOff). Listing them
-// all inside one table cell makes that row taller than the whole rest of the report, so the cell caps
-// the pods it shows and summarizes the rest as "+N more".
+// all inside one table cell makes that row taller than the whole rest of the report, so the cell
+// shows this many by default behind a "Show N more" / "Show less" toggle (see ProblemPodsCell).
 const NESTED_POD_CAP = 6;
 
 // usePaginated slices `rows` into the current page. `page` is clamped in render so shrinking the list
@@ -324,6 +324,53 @@ interface WorkloadRow {
   pods?: { name: string; reason?: string; restarts: number }[];
 }
 
+// ProblemPodsCell renders a workload's failing pods, collapsed to NESTED_POD_CAP so one busy
+// Deployment (15 CrashLoopBackOff replicas) can't outgrow the whole table. The "Show N more" toggle
+// expands the full list in place and flips to "Show less", so the detail is one click away — not lost.
+function ProblemPodsCell({
+  namespace,
+  pods,
+}: {
+  namespace: string;
+  pods: { name: string; reason?: string; restarts: number }[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (pods.length === 0) return <>—</>;
+  const shown = expanded ? pods : pods.slice(0, NESTED_POD_CAP);
+  const hidden = pods.length - NESTED_POD_CAP;
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+      {shown.map(p => (
+        <Box key={p.name} sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Link routeName="Pod" params={{ namespace, name: p.name }}>
+            {p.name}
+          </Link>
+          {p.reason && <Chip label={p.reason} size="small" color="warning" variant="outlined" />}
+          {p.restarts > 0 && (
+            <Typography variant="caption" color="text.secondary">
+              {p.restarts} restarts
+            </Typography>
+          )}
+        </Box>
+      ))}
+      {hidden > 0 && (
+        <Typography
+          variant="caption"
+          onClick={() => setExpanded(e => !e)}
+          sx={{
+            cursor: 'pointer',
+            color: 'primary.main',
+            width: 'fit-content',
+            '&:hover': { textDecoration: 'underline' },
+          }}
+        >
+          {expanded ? 'Show less' : `Show ${hidden} more`}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
 // Renders a workload table where the namespace, the workload and each problem
 // pod link to their Headlamp detail view, so the user can jump straight to the
 // resource instead of just reading a name.
@@ -369,38 +416,7 @@ function WorkloadSection<T extends WorkloadRow>({
                 </TableCell>
                 <TableCell>{status(row)}</TableCell>
                 <TableCell>
-                  {problemPods.length === 0 ? (
-                    '—'
-                  ) : (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                      {problemPods.slice(0, NESTED_POD_CAP).map(p => (
-                        <Box
-                          key={p.name}
-                          sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}
-                        >
-                          <Link
-                            routeName="Pod"
-                            params={{ namespace: row.namespace, name: p.name }}
-                          >
-                            {p.name}
-                          </Link>
-                          {p.reason && (
-                            <Chip label={p.reason} size="small" color="warning" variant="outlined" />
-                          )}
-                          {p.restarts > 0 && (
-                            <Typography variant="caption" color="text.secondary">
-                              {p.restarts} restarts
-                            </Typography>
-                          )}
-                        </Box>
-                      ))}
-                      {problemPods.length > NESTED_POD_CAP && (
-                        <Typography variant="caption" color="text.secondary">
-                          +{problemPods.length - NESTED_POD_CAP} more
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
+                  <ProblemPodsCell namespace={row.namespace} pods={problemPods} />
                 </TableCell>
               </TableRow>
             );
