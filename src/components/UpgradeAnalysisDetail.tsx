@@ -13,6 +13,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Grid from '@mui/material/Grid';
+import Pagination from '@mui/material/Pagination';
 import Paper from '@mui/material/Paper';
 import Switch from '@mui/material/Switch';
 import Tab from '@mui/material/Tab';
@@ -54,6 +55,76 @@ function MetricCard({ label, value }: { label: string; value: string | number })
       <Typography variant="h6" fontWeight={700}>{value}</Typography>
       <Typography variant="caption" color="text.secondary">{label}</Typography>
     </Paper>
+  );
+}
+
+// A crashing workload can produce dozens of rows (a Deployment with 15 CrashLoopBackOff pods, one
+// Issue line per pod). Rather than render every row at once — which turns the report into an endless
+// scroll — long lists are paged into chunks of RESOURCE_PAGE_SIZE with a numbered pager (1, 2, 3…).
+const RESOURCE_PAGE_SIZE = 12;
+
+// A single Deployment can own dozens of failing pods (a 15-replica CrashLoopBackOff). Listing them
+// all inside one table cell makes that row taller than the whole rest of the report, so the cell caps
+// the pods it shows and summarizes the rest as "+N more".
+const NESTED_POD_CAP = 6;
+
+// usePaginated slices `rows` into the current page. `page` is clamped in render so shrinking the list
+// (e.g. toggling "Only show problems") can never leave the pager pointing past the last page.
+function usePaginated<T>(rows: T[], pageSize = RESOURCE_PAGE_SIZE) {
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const current = Math.min(page, pageCount);
+  const start = (current - 1) * pageSize;
+  return {
+    items: rows.slice(start, start + pageSize),
+    page: current,
+    setPage,
+    pageCount,
+    total: rows.length,
+  };
+}
+
+// PaginationBar renders the numbered pager plus a "N total" count. It hides itself when everything
+// fits on one page, so short lists look exactly as they did before pagination existed.
+function PaginationBar({
+  page,
+  pageCount,
+  total,
+  onChange,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  onChange: (p: number) => void;
+}) {
+  if (pageCount <= 1) return null;
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+      <Typography variant="caption" color="text.secondary">
+        {total} total
+      </Typography>
+      <Pagination size="small" count={pageCount} page={page} onChange={(_, p) => onChange(p)} />
+    </Box>
+  );
+}
+
+// IssuesSection lists the report's issues, one alert per line. A single crashing Deployment emits one
+// issue per pod, so this is the list most likely to run into the dozens — it's paged like the tables.
+function IssuesSection({ issues }: { issues?: string[] }) {
+  const pg = usePaginated(issues ?? []);
+  if (!issues || issues.length === 0) return null;
+  return (
+    <Box>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Issues
+      </Typography>
+      {pg.items.map((issue, i) => (
+        <Alert key={i} severity="warning" sx={{ mb: 1 }}>
+          {issue}
+        </Alert>
+      ))}
+      <PaginationBar page={pg.page} pageCount={pg.pageCount} total={pg.total} onChange={pg.setPage} />
+    </Box>
   );
 }
 
@@ -263,6 +334,7 @@ function WorkloadSection<T extends WorkloadRow>({
   rows: T[];
   status: (row: T) => string;
 }) {
+  const p = usePaginated(rows ?? []);
   if (!rows || rows.length === 0) return null;
   return (
     <Box sx={{ mb: 3 }}>
@@ -277,7 +349,7 @@ function WorkloadSection<T extends WorkloadRow>({
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((row, i) => {
+          {p.items.map((row, i) => {
             const problemPods = (row.pods ?? []).filter(p => p.reason || p.restarts > 0);
             return (
               <TableRow key={i}>
@@ -297,7 +369,7 @@ function WorkloadSection<T extends WorkloadRow>({
                     '—'
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                      {problemPods.map(p => (
+                      {problemPods.slice(0, NESTED_POD_CAP).map(p => (
                         <Box
                           key={p.name}
                           sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}
@@ -318,6 +390,11 @@ function WorkloadSection<T extends WorkloadRow>({
                           )}
                         </Box>
                       ))}
+                      {problemPods.length > NESTED_POD_CAP && (
+                        <Typography variant="caption" color="text.secondary">
+                          +{problemPods.length - NESTED_POD_CAP} more
+                        </Typography>
+                      )}
                     </Box>
                   )}
                 </TableCell>
@@ -326,6 +403,7 @@ function WorkloadSection<T extends WorkloadRow>({
           })}
         </TableBody>
       </Table>
+      <PaginationBar page={p.page} pageCount={p.pageCount} total={p.total} onChange={p.setPage} />
     </Box>
   );
 }
@@ -438,6 +516,7 @@ const PVC_PHASE_COLOR: Record<string, 'success' | 'warning' | 'error' | 'default
 // in the data section (not only as a graph node). Lost/Pending are the ones that block or warn on
 // an upgrade — a drained node can't reattach storage that isn't Bound.
 function PVCTable({ rows }: { rows: NonNullable<Report['workloads']['pvcs']> }) {
+  const pg = usePaginated(rows ?? []);
   if (!rows || rows.length === 0) return null;
   return (
     <Box sx={{ mb: 3 }}>
@@ -454,7 +533,7 @@ function PVCTable({ rows }: { rows: NonNullable<Report['workloads']['pvcs']> }) 
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((p, i) => (
+          {pg.items.map((p, i) => (
             <TableRow key={i}>
               <TableCell>
                 <Link routeName="namespace" params={{ name: p.namespace }}>
@@ -482,6 +561,42 @@ function PVCTable({ rows }: { rows: NonNullable<Report['workloads']['pvcs']> }) 
           ))}
         </TableBody>
       </Table>
+      <PaginationBar page={pg.page} pageCount={pg.pageCount} total={pg.total} onChange={pg.setPage} />
+    </Box>
+  );
+}
+
+// NodesTable lists cluster nodes with their status. A large cluster has hundreds of nodes, so the
+// list is paged like the workload tables.
+function NodesTable({ rows }: { rows: Report['workloads']['nodes'] }) {
+  const pg = usePaginated(rows ?? []);
+  if (!rows || rows.length === 0) return null;
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Nodes
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Name</TableCell>
+            <TableCell>Status</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {pg.items.map(n => (
+            <TableRow key={n.name}>
+              <TableCell>
+                <Link routeName="node" params={{ name: n.name }}>
+                  {n.name}
+                </Link>
+              </TableCell>
+              <TableCell>{n.status}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <PaginationBar page={pg.page} pageCount={pg.pageCount} total={pg.total} onChange={pg.setPage} />
     </Box>
   );
 }
@@ -523,33 +638,7 @@ function WorkloadsData({ report }: { report: Report }) {
         />
       </Box>
 
-      {nodes.length > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-            Nodes
-          </Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {nodes.map(n => (
-                <TableRow key={n.name}>
-                  <TableCell>
-                    <Link routeName="node" params={{ name: n.name }}>
-                      {n.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{n.status}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Box>
-      )}
+      <NodesTable rows={nodes} />
 
       <WorkloadSection
         title="Deployments"
@@ -602,6 +691,7 @@ const BARE_POD_STATUS_COLOR: Record<string, 'success' | 'error' | 'default'> = {
 // They aren't covered by any Deployment/StatefulSet row, so a failing bare pod would otherwise be
 // invisible in the data section. A "Down" (not-ready) one is the case that matters for an upgrade.
 function BarePodsTable({ rows }: { rows: NonNullable<Report['workloads']['barePods']> }) {
+  const pg = usePaginated(rows ?? []);
   if (!rows || rows.length === 0) return null;
   return (
     <Box sx={{ mb: 3 }}>
@@ -617,7 +707,7 @@ function BarePodsTable({ rows }: { rows: NonNullable<Report['workloads']['barePo
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((p, i) => (
+          {pg.items.map((p, i) => (
             <TableRow key={i}>
               <TableCell>
                 <Link routeName="namespace" params={{ name: p.namespace }}>
@@ -641,6 +731,7 @@ function BarePodsTable({ rows }: { rows: NonNullable<Report['workloads']['barePo
           ))}
         </TableBody>
       </Table>
+      <PaginationBar page={pg.page} pageCount={pg.pageCount} total={pg.total} onChange={pg.setPage} />
     </Box>
   );
 }
@@ -1168,15 +1259,8 @@ export function UpgradeAnalysisDetail() {
             {/* Workloads — raw inventory with an "only problems" toggle */}
             <WorkloadsData report={report} />
 
-            {/* Issues */}
-            {report.issues && report.issues.length > 0 && (
-              <Box>
-                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>Issues</Typography>
-                {report.issues.map((issue, i) => (
-                  <Alert key={i} severity="warning" sx={{ mb: 1 }}>{issue}</Alert>
-                ))}
-              </Box>
-            )}
+            {/* Issues — paged, one CrashLoopBackOff pod per line can be dozens of entries */}
+            <IssuesSection issues={report.issues} />
 
             {/* AI Reasoning from report */}
             {report.aiReasoning && !status.aiReasoning && (
