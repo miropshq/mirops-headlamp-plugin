@@ -12,15 +12,21 @@ surfaces that analysis inside Headlamp, next to the live cluster it already talk
 
 ## Features
 
-- **Dependency graph** — `graph.nodes` + `graph.edges` rendered with nodes colored by **risk**
-  (CVSS-style) and shaped by **type** (`workload | network | addon | config | storage | infra`).
-- **Upgrade decision** — a condition-driven verdict (`SAFE | WARNING | CRITICAL | ERROR`) with an
-  explicit **"Why blocked"** panel listing every blocker.
-- **Readiness score** — a 0–100 gauge (separate axis from risk).
+- **Upgrade decision** — a condition-driven verdict (`SAFE | WARNING | CRITICAL | ERROR`) with a
+  unified **Findings** panel listing every blocker and warning.
+- **Readiness score** — a 0–100 gauge on its own health axis, separate from the verdict, so a healthy
+  number never contradicts a blocked upgrade.
+- **Risk & Compatibility** — one tabbed section switching between **Add-on Compatibility**, **Namespace
+  Risk** (heatmap), and the **Dependency Graph**. It opens on whatever is wrong (context-aware) and each
+  tab carries a count badge.
+- **Dependency graph** — `graph.nodes` + `graph.edges`, nodes colored by **risk** (CVSS-style), shaped
+  by **type** (`workload | network | addon | config | storage | infra`), and labeled with the **risk
+  value** on each node. Conditional: when nothing depends on the at-risk components it dims and shows a
+  *no dependency chains* state instead of a lone node.
 - **Add-on compatibility** — a table flagging incompatible add-ons and the version to upgrade to.
-- **Per-namespace risk** — a heatmap companion to the graph.
-- **Workloads & metrics** — deployments, statefulsets, daemonsets, jobs, deprecated APIs, plus pod
-  health, resource pressure, and stability deltas.
+- **Workloads & metrics** — deployments, statefulsets, daemonsets, jobs, **PVCs** (with phase),
+  **standalone pods**, and deprecated APIs — behind an *only show problems* toggle — plus pod health,
+  resource pressure, and stability deltas.
 - **AI insights** — surfaces AI reasoning/score when enabled, and an explicit banner when the AI
   call failed (e.g. insufficient credit).
 - **Remediation plans** — review, approve, and selectively execute operator-proposed actions.
