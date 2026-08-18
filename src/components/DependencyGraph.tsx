@@ -13,20 +13,24 @@ import {
   MarkerType,
   type Node,
   ReactFlow,
+  useEdgesState,
+  useNodesState,
 } from '@xyflow/react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { HIGH_RISK_THRESHOLD, riskSeverity } from '../riskColor';
 import { GraphNode, GraphNodeType, ReportGraph } from '../types';
 
-// Layered layout: one column per node type, following the dependency
-// direction (Ingress/Service → workload → config/storage → node/add-on).
+// Layered layout, read left→right as "what fails" → "what it depends on":
+// failing workloads/pods on the left, the storage/config they use next, the
+// node they run on, and add-ons pinned to the far right. Empty columns are
+// compacted away in buildNodes so a missing layer never leaves a gap.
 const TYPE_COLUMN: Record<GraphNodeType, number> = {
   network: 0,
   workload: 1,
   config: 2,
   storage: 2,
   infra: 3,
-  addon: 3,
+  addon: 4,
 };
 
 const NODE_WIDTH = 220;
@@ -79,8 +83,15 @@ function buildNodes(visible: VisibleGraph): Node[] {
     nameCounts.set(n.name, (nameCounts.get(n.name) ?? 0) + 1);
   }
 
+  // Compact the used columns to consecutive indices, so a missing layer (e.g. no network nodes)
+  // doesn't leave an empty leading column that pushes everything right and stretches the edges.
+  const denseIndex = new Map(
+    [...byColumn.keys()].sort((a, b) => a - b).map((col, i) => [col, i])
+  );
+
   const rfNodes: Node[] = [];
   for (const [col, list] of byColumn) {
+    const x = (denseIndex.get(col) ?? 0) * COLUMN_GAP;
     list.sort(
       (a, b) =>
         (a.namespace ?? '').localeCompare(b.namespace ?? '') || a.name.localeCompare(b.name)
@@ -92,7 +103,7 @@ function buildNodes(visible: VisibleGraph): Node[] {
       const showNamespace = !!n.namespace && (nameCounts.get(n.name) ?? 0) > 1;
       rfNodes.push({
         id: n.id,
-        position: { x: col * COLUMN_GAP, y: row * ROW_GAP },
+        position: { x, y: row * ROW_GAP },
         connectable: false,
         data: {
           label: (
@@ -164,11 +175,19 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
     () => filterByRisk(graph, showAll, minRisk),
     [graph, showAll, minRisk]
   );
-  const nodes = useMemo(() => buildNodes(visible), [visible]);
-  const edges = useMemo(() => {
+  // The computed layout is the starting point; useNodesState holds the live positions so nodes can
+  // be dragged to untangle the graph by hand. Re-sync whenever the filter recomputes the layout.
+  const computedNodes = useMemo(() => buildNodes(visible), [visible]);
+  const computedEdges = useMemo(() => {
     const visibleIds = new Set(visible.nodes.map(n => n.id));
     return buildEdges(graph, visibleIds);
   }, [graph, visible]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(computedNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
+
+  useEffect(() => setNodes(computedNodes), [computedNodes, setNodes]);
+  useEffect(() => setEdges(computedEdges), [computedEdges, setEdges]);
 
   if (graph.nodes.length === 0) {
     return null;
@@ -211,8 +230,9 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
         </Typography>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-        Each node shows its risk value (0–100) and severity, colored None→Critical; gray
-        dashed nodes are healthy direct neighbors shown for context; edges labeled by dependency type.
+        Failing workloads on the left, add-ons on the right; each node shows its risk value (0–100)
+        and severity, colored None→Critical; gray dashed nodes are healthy direct neighbors shown for
+        context; edges labeled by dependency type. Drag any node to untangle the layout.
       </Typography>
       <Box sx={{ height: 520, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
         <ReactFlow
@@ -220,6 +240,8 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
           key={`${showAll}-${minRisk}`}
           nodes={nodes}
           edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           colorMode={theme.palette.mode}
           fitView
           minZoom={0.1}
