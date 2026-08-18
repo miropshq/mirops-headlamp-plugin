@@ -13,7 +13,6 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Grid from '@mui/material/Grid';
-import Pagination from '@mui/material/Pagination';
 import Paper from '@mui/material/Paper';
 import Switch from '@mui/material/Switch';
 import Tab from '@mui/material/Tab';
@@ -21,6 +20,7 @@ import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
+import TablePagination from '@mui/material/TablePagination';
 import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
 import Typography from '@mui/material/Typography';
@@ -60,7 +60,7 @@ function MetricCard({ label, value }: { label: string; value: string | number })
 
 // A crashing workload can produce dozens of rows (a Deployment with 15 CrashLoopBackOff pods, one
 // Issue line per pod). Rather than render every row at once — which turns the report into an endless
-// scroll — long lists are paged into chunks of RESOURCE_PAGE_SIZE with a numbered pager (1, 2, 3…).
+// scroll — long lists are paged into chunks of RESOURCE_PAGE_SIZE with a range pager ("1–12 of N").
 const RESOURCE_PAGE_SIZE = 12;
 
 // A single Deployment can own dozens of failing pods (a 15-replica CrashLoopBackOff). Listing them
@@ -80,31 +80,35 @@ function usePaginated<T>(rows: T[], pageSize = RESOURCE_PAGE_SIZE) {
     page: current,
     setPage,
     pageCount,
+    pageSize,
     total: rows.length,
   };
 }
 
-// PaginationBar renders the numbered pager plus a "N total" count. It hides itself when everything
-// fits on one page, so short lists look exactly as they did before pagination existed.
+// PaginationBar is the range-style pager Headlamp uses on its own tables ("1–12 of 40  ‹ ›"). It's
+// MUI's TablePagination rendered standalone (component="div") below a table, with the rows-per-page
+// selector hidden. It removes itself when everything fits on one page, so short lists are untouched.
 function PaginationBar({
   page,
-  pageCount,
+  pageSize,
   total,
   onChange,
 }: {
   page: number;
-  pageCount: number;
+  pageSize: number;
   total: number;
   onChange: (p: number) => void;
 }) {
-  if (pageCount <= 1) return null;
+  if (total <= pageSize) return null;
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-      <Typography variant="caption" color="text.secondary">
-        {total} total
-      </Typography>
-      <Pagination size="small" count={pageCount} page={page} onChange={(_, p) => onChange(p)} />
-    </Box>
+    <TablePagination
+      component="div"
+      count={total}
+      page={page - 1}
+      rowsPerPage={pageSize}
+      rowsPerPageOptions={[]}
+      onPageChange={(_, p) => onChange(p + 1)}
+    />
   );
 }
 
@@ -123,7 +127,7 @@ function IssuesSection({ issues }: { issues?: string[] }) {
           {issue}
         </Alert>
       ))}
-      <PaginationBar page={pg.page} pageCount={pg.pageCount} total={pg.total} onChange={pg.setPage} />
+      <PaginationBar page={pg.page} pageSize={pg.pageSize} total={pg.total} onChange={pg.setPage} />
     </Box>
   );
 }
@@ -403,7 +407,7 @@ function WorkloadSection<T extends WorkloadRow>({
           })}
         </TableBody>
       </Table>
-      <PaginationBar page={p.page} pageCount={p.pageCount} total={p.total} onChange={p.setPage} />
+      <PaginationBar page={p.page} pageSize={p.pageSize} total={p.total} onChange={p.setPage} />
     </Box>
   );
 }
@@ -561,7 +565,7 @@ function PVCTable({ rows }: { rows: NonNullable<Report['workloads']['pvcs']> }) 
           ))}
         </TableBody>
       </Table>
-      <PaginationBar page={pg.page} pageCount={pg.pageCount} total={pg.total} onChange={pg.setPage} />
+      <PaginationBar page={pg.page} pageSize={pg.pageSize} total={pg.total} onChange={pg.setPage} />
     </Box>
   );
 }
@@ -596,7 +600,7 @@ function NodesTable({ rows }: { rows: Report['workloads']['nodes'] }) {
           ))}
         </TableBody>
       </Table>
-      <PaginationBar page={pg.page} pageCount={pg.pageCount} total={pg.total} onChange={pg.setPage} />
+      <PaginationBar page={pg.page} pageSize={pg.pageSize} total={pg.total} onChange={pg.setPage} />
     </Box>
   );
 }
@@ -731,7 +735,7 @@ function BarePodsTable({ rows }: { rows: NonNullable<Report['workloads']['barePo
           ))}
         </TableBody>
       </Table>
-      <PaginationBar page={pg.page} pageCount={pg.pageCount} total={pg.total} onChange={pg.setPage} />
+      <PaginationBar page={pg.page} pageSize={pg.pageSize} total={pg.total} onChange={pg.setPage} />
     </Box>
   );
 }
