@@ -929,8 +929,16 @@ export function UpgradeAnalysisDetail() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
+  // Re-arm the report poll only when a *new* report is actually expected — the CR first loads
+  // (hasItem), a fresh analysis completes (lastAnalysisTime changes), or a write fails
+  // (reportState). Depending on the whole `item` re-ran this on every watch tick (status
+  // heartbeats, observedGeneration bumps), which reset the view to "Generating…" over and over.
+  const hasItem = !!item;
+  const pollReportState = item?.status?.reportState;
+  const pollLastAnalysis = item?.status?.lastAnalysisTime;
+
   useEffect(() => {
-    if (!item || !name) return;
+    if (!hasItem || !name) return;
 
     // Poll the report endpoint rather than trusting a single read: right after an analysis the
     // export may still be in flight (the object isn't in storage yet → 404) and the CR watch can
@@ -953,7 +961,7 @@ export function UpgradeAnalysisDetail() {
 
     const attempt = () => {
       // Hard failure recorded by the operator (banner above): stop retrying.
-      if ((item.status ?? {}).reportState === 'failed') {
+      if (pollReportState === 'failed') {
         if (!cancelled) setReportLoading(false);
         return;
       }
@@ -980,7 +988,7 @@ export function UpgradeAnalysisDetail() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [item, name, reportsNamespace]);
+  }, [name, reportsNamespace, hasItem, pollLastAnalysis, pollReportState]);
 
   if (error) return <Alert severity="error">{String(error)}</Alert>;
   if (!item) return <CircularProgress />;
@@ -1075,24 +1083,21 @@ export function UpgradeAnalysisDetail() {
                 />
               )}
             </Box>
-            {remediationRef && (
-              <Box sx={{ mt: 1 }}>
-                <Link
-                  routeName="remediationPlanDetail"
-                  params={{ name: remediationRef }}
-                >
-                  View Remediation Plan →
-                </Link>
-              </Box>
-            )}
-            <Box sx={{ mt: 2 }}>
+            {/* Button first so it holds a stable position; the remediation link sits beside it and
+                appears (once the plan loads) without shifting the button. */}
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               <Button variant="contained" size="small" disabled={refreshing} onClick={reanalyze}>
                 {refreshing ? <CircularProgress size={18} /> : 'Re-analyze'}
               </Button>
-              {refreshError && (
-                <Alert severity="error" sx={{ mt: 1 }}>{refreshError}</Alert>
+              {remediationRef && (
+                <Link routeName="remediationPlanDetail" params={{ name: remediationRef }}>
+                  View Remediation Plan →
+                </Link>
               )}
             </Box>
+            {refreshError && (
+              <Alert severity="error" sx={{ mt: 1 }}>{refreshError}</Alert>
+            )}
           </Box>
         </Box>
 
