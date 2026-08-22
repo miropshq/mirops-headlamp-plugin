@@ -37,6 +37,7 @@ interface FormState {
   aiEnabled: boolean;
   aiProvider: 'anthropic' | 'openai';
   aiModel: string;
+  aiMaxTokens: string;
   aiCredentialsSecret: string;
   // remediation
   remediationEnabled: boolean;
@@ -65,6 +66,7 @@ const DEFAULT: FormState = {
   aiEnabled: false,
   aiProvider: 'anthropic',
   aiModel: '',
+  aiMaxTokens: '',
   aiCredentialsSecret: '',
   remediationEnabled: false,
   remediationMaxRiskLevel: 'low',
@@ -99,6 +101,7 @@ function buildCR(f: FormState) {
       enabled: true,
       ...(f.aiProvider && { provider: f.aiProvider }),
       ...(f.aiModel && { model: f.aiModel }),
+      ...(Number(f.aiMaxTokens) > 0 && { maxTokens: Number(f.aiMaxTokens) }),
       ...(f.aiCredentialsSecret && { credentialsSecret: f.aiCredentialsSecret }),
       remediation: {
         enabled: f.remediationEnabled,
@@ -317,6 +320,17 @@ export function UpgradeAnalysisCreate() {
                   value={form.aiModel}
                   onChange={e => set('aiModel', e.target.value)}
                   helperText="Name of the model to use"
+                />
+
+                <TextField
+                  label="Max tokens"
+                  type="number"
+                  fullWidth
+                  placeholder="2048"
+                  value={form.aiMaxTokens}
+                  onChange={e => set('aiMaxTokens', e.target.value)}
+                  inputProps={{ min: 1, max: 32768 }}
+                  helperText="Max tokens the model may generate (both providers). Higher = longer explanation, more cost. Default 2048."
                 />
 
                 <TextField

@@ -17,6 +17,7 @@ export interface UpgradeAnalysisSpec {
     enabled: boolean;
     provider?: 'anthropic' | 'openai';
     model?: string;
+    maxTokens?: number;
     credentialsSecret?: string;
     remediation?: {
       enabled: boolean;
