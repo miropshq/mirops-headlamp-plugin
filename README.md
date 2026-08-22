@@ -1,4 +1,4 @@
-# mirops-ui
+# mirops Headlamp plugin
 
 A [Headlamp](https://headlamp.dev/) plugin (React + TypeScript) that visualizes the output of the
 **mirops** Kubernetes operator. Its core value is the part a terminal can't show: it **draws the
@@ -26,10 +26,12 @@ surfaces that analysis inside Headlamp, next to the live cluster it already talk
 - **Add-on compatibility** — a table flagging incompatible add-ons and the version to upgrade to.
 - **Workloads & metrics** — deployments, statefulsets, daemonsets, jobs, **PVCs** (with phase),
   **standalone pods**, and deprecated APIs — behind an *only show problems* toggle — plus pod health,
-  resource pressure, and stability deltas.
+  resource pressure, and stability deltas. Long tables and the issue list **paginate**.
 - **AI insights** — surfaces AI reasoning/score when enabled, and an explicit banner when the AI
   call failed (e.g. insufficient credit).
 - **Remediation plans** — review, approve, and selectively execute operator-proposed actions.
+- **Create & configure** — author an `UpgradeAnalysis` from the UI: target version, scope, report
+  destination, and AI settings — provider, model, **max tokens**, and remediation risk level.
 
 ---
 
@@ -69,18 +71,11 @@ Helm values.
 helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/
 helm repo update
 
-# 2. The plugin image is private — create the ghcr.io pull secret first
-kubectl create secret docker-registry ghcr-mirops \
-  --namespace headlamp \
-  --docker-server=ghcr.io \
-  --docker-username=<github-user> \
-  --docker-password=<PAT with read:packages>
-
-# 3. Install Headlamp with the mirops plugin
+# 2. Install Headlamp with the mirops plugin (public image, no pull secret needed)
 helm install headlamp headlamp/headlamp -n headlamp --create-namespace \
   -f deploy/headlamp-values.yaml
 
-# 4. Access it
+# 3. Access it
 kubectl -n headlamp port-forward svc/headlamp 8080:80
 open http://localhost:8080
 ```

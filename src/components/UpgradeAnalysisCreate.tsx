@@ -368,7 +368,10 @@ export function UpgradeAnalysisCreate() {
                         <MenuItem value="medium">Medium — low and medium risk</MenuItem>
                         <MenuItem value="high">High — all actions</MenuItem>
                       </Select>
-                      <FormHelperText>Maximum risk level of the actions the AI can propose</FormHelperText>
+                      <FormHelperText>
+                        Ceiling on proposed actions — restart-pod is low, scale-deployment medium,
+                        cordon-node high. Actions above the level are dropped from the plan.
+                      </FormHelperText>
                     </FormControl>
 
                     <FormControlLabel
