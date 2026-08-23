@@ -191,7 +191,7 @@ function AddonCompatibilityTable({ report, embedded }: { report: Report; embedde
 // Namespace, so it isn't navigable and is sorted last with distinct styling.
 const CLUSTER_SCOPED_BUCKET = 'cluster-scoped';
 
-// The operator serves report.json from an in-cluster Service named
+// The operator serves the report (<name>.mirops) from an in-cluster Service named
 // 'mirops-reports'. UpgradeAnalysis is cluster-scoped so it no longer carries a
 // namespace to locate it, and the operator can be installed in any namespace.
 // The deployer sets that namespace in headlamp-values.yaml; the initContainer
@@ -951,9 +951,10 @@ export function UpgradeAnalysisDetail() {
 
     // The operator serves reports from an in-cluster service not reachable from the browser
     // directly; route through the Kubernetes API server service proxy via Headlamp's backend.
+    // Reports use the `.mirops` extension (JSON content) for every destination, local included.
     const path =
       `/api/v1/namespaces/${reportsNamespace}/services/${REPORTS_SERVICE_NAME}:8084` +
-      `/proxy/reports/${name}.json`;
+      `/proxy/reports/${name}.mirops`;
 
     setReportLoading(true);
     setReportError(null);
