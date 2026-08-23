@@ -1044,6 +1044,24 @@ export function UpgradeAnalysisDetail() {
     );
   }
 
+  // The operator writes status (verdict + score + AI) once the analysis finishes; until then there is
+  // no verdict yet. Render one "analyzing" spinner instead of a placeholder WARNING verdict and a
+  // premature "AI unavailable" banner that would flash before the real result lands. On a re-analysis
+  // the previous status is still present, so this only shows on the very first run.
+  if (!status.decision) {
+    return (
+      <SectionBox title={`Upgrade Analysis: ${name}`}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 4 }}>
+          <CircularProgress size={22} />
+          <Typography variant="body1">
+            Analyzing cluster — evaluating readiness
+            {item.spec?.ai?.enabled ? ' and running AI scoring' : ''}…
+          </Typography>
+        </Box>
+      </SectionBox>
+    );
+  }
+
   // The operator links a RemediationPlan back to its analysis via
   // spec.upgradeAnalysisRef (no annotation on the analysis itself).
   const remediationPlan = plans?.find(p => p.spec?.upgradeAnalysisRef === name);
