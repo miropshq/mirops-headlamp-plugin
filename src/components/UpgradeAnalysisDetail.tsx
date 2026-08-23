@@ -1177,7 +1177,9 @@ export function UpgradeAnalysisDetail() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={20} />
             <Typography variant="body2" color="text.secondary">
-              Generating report…
+              {/* "Loading" once the operator has written the report (reportState = written) — we're
+                  just fetching the file; "Generating" only while the analysis is still producing it. */}
+              {status.reportState === 'written' ? 'Loading report…' : 'Generating report…'}
             </Typography>
           </Box>
         ) : (
