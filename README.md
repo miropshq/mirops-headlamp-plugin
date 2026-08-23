@@ -48,14 +48,15 @@ Both are **cluster-scoped** (they analyse/remediate the whole cluster, so they h
 
 ### Two data sources
 
-- **`report.json`** — the full mirror (`graph`, `risk`, `addons`), `decision`, scores, metrics, and
-  workloads. Served by the operator's in-cluster HTTP endpoint (or S3 / Azure Blob / PVC). The
-  plugin reaches it through the Kubernetes API server's service proxy.
-- **`UpgradeAnalysis` CR status** — status-only fields not in `report.json`: `aiError`, `aiScore`,
+- **The report** (`<name>.mirops`, JSON content) — the full mirror (`graph`, `risk`, `addons`),
+  `decision`, scores, metrics, and workloads. Served by the operator's in-cluster HTTP endpoint (or
+  read back from S3 / Azure Blob / PVC). The plugin reaches it through the Kubernetes API server's
+  service proxy.
+- **`UpgradeAnalysis` CR status** — status-only fields not in the report: `aiError`, `aiScore`,
   `aiModel`, `addonsChecked`, `incompatibleAddons`, `reportPath`, `lastAnalysisTime`, and a mirrored
   `decision`.
 
-The plugin prefers `report.json` for everything it has and uses the CR status only for the
+The plugin prefers the report for everything it has and uses the CR status only for the
 status-only fields (notably `aiError`).
 
 ---
@@ -97,7 +98,7 @@ initContainers:
 ```
 
 The `initContainer` writes that value to a `config.json` next to the plugin, which the plugin reads
-at runtime to proxy `report.json` from the right place. **If unset, it defaults to `mirops`.**
+at runtime to proxy the report (`<name>.mirops`) from the right place. **If unset, it defaults to `mirops`.**
 
 ---
 
