@@ -1108,9 +1108,11 @@ export function UpgradeAnalysisDetail() {
                 {refreshing ? <CircularProgress size={18} /> : 'Re-analyze'}
               </Button>
               {remediationRef && (
-                <Link routeName="remediationPlanDetail" params={{ name: remediationRef }}>
-                  View Remediation Plan →
-                </Link>
+                <Box sx={{ ml: 'auto' }}>
+                  <Link routeName="remediationPlanDetail" params={{ name: remediationRef }}>
+                    View Remediation Plan →
+                  </Link>
+                </Box>
               )}
             </Box>
             {refreshError && (
@@ -1142,42 +1144,6 @@ export function UpgradeAnalysisDetail() {
           </Alert>
         )}
 
-        {/* AI Reasoning */}
-        {status.aiReasoning && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" fontWeight={600}>AI Reasoning ({status.aiModel})</Typography>
-            <Typography variant="body2">{status.aiReasoning}</Typography>
-          </Alert>
-        )}
-
-        {/* AI was enabled but produced no result → it failed in the operator */}
-        {aiFailed && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" fontWeight={600}>
-              AI unavailable — showing base analysis only
-            </Typography>
-            <Typography variant="body2">
-              AI scoring was enabled but the AI call failed, so the score and decision
-              above are the base analysis only
-              {remediationRequested && ', and no RemediationPlan was generated'}.
-            </Typography>
-            {status.aiError ? (
-              <Typography
-                variant="body2"
-                component="pre"
-                sx={{ mt: 1, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.8rem' }}
-              >
-                {status.aiError}
-              </Typography>
-            ) : (
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                Check the operator logs for the exact cause (common: invalid/empty API
-                key or insufficient API credits).
-              </Typography>
-            )}
-          </Alert>
-        )}
-
         {/* Conditions */}
         {status.conditions && status.conditions.length > 0 && (
           <Table size="small">
@@ -1203,22 +1169,59 @@ export function UpgradeAnalysisDetail() {
         )}
       </SectionBox>
 
-      {/* Report section */}
+      {/* Report section — while the report is still being fetched show only the spinner; once it
+          resolves, render the AI reasoning and the report body together, so nothing appears above a
+          still-loading report. */}
       <SectionBox>
-        {reportPending && (
+        {reportPending ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={20} />
             <Typography variant="body2" color="text.secondary">
               Generating report…
             </Typography>
           </Box>
-        )}
-        {reportError && (
-          <Alert severity="warning">
-            Could not load report: {reportError}
-          </Alert>
-        )}
-        {report && (
+        ) : (
+          <>
+            {/* AI Reasoning — with the report, once "Generating report…" finishes */}
+            {status.aiReasoning && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600}>AI Reasoning ({status.aiModel})</Typography>
+                <Typography variant="body2">{status.aiReasoning}</Typography>
+              </Alert>
+            )}
+            {/* AI was enabled but produced no result → it failed in the operator */}
+            {aiFailed && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  AI unavailable — showing base analysis only
+                </Typography>
+                <Typography variant="body2">
+                  AI scoring was enabled but the AI call failed, so the score and decision
+                  above are the base analysis only
+                  {remediationRequested && ', and no RemediationPlan was generated'}.
+                </Typography>
+                {status.aiError ? (
+                  <Typography
+                    variant="body2"
+                    component="pre"
+                    sx={{ mt: 1, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.8rem' }}
+                  >
+                    {status.aiError}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Check the operator logs for the exact cause (common: invalid/empty API
+                    key or insufficient API credits).
+                  </Typography>
+                )}
+              </Alert>
+            )}
+            {reportError && (
+              <Alert severity="warning">
+                Could not load report: {reportError}
+              </Alert>
+            )}
+            {report && (
           <>
             {/* One consolidated Findings block: blockers (must fix) and warnings (don't block),
                 for every verdict — so the report always says what's wrong and whether it stops the
@@ -1318,6 +1321,8 @@ export function UpgradeAnalysisDetail() {
                 Raw JSON
               </Button>
             </Box>
+          </>
+            )}
           </>
         )}
       </SectionBox>
