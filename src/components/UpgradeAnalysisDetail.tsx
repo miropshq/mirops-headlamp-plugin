@@ -684,7 +684,11 @@ function WorkloadsData({ report }: { report: Report }) {
         title="Jobs"
         routeName="Job"
         rows={w.jobs}
-        status={j => `${j.active} active`}
+        status={j =>
+          j.status === 'Failed'
+            ? `failed${j.reason ? ` (${j.reason})` : ''}`
+            : `${j.active} active — healthy, but may be interrupted by the upgrade`
+        }
       />
       <BarePodsTable rows={barePods} />
       <PVCTable rows={pvcs} />
