@@ -172,8 +172,10 @@ function AddonCompatibilityTable({ report, embedded }: { report: Report; embedde
                 />
               </TableCell>
               <TableCell>
-                {a.status === 'incompatible' && a.requiredVersion
-                  ? `upgrade to ${a.requiredVersion}`
+                {a.status === 'incompatible'
+                  ? a.requiredVersion
+                    ? `upgrade to ${a.requiredVersion}`
+                    : 'no version available'
                   : '—'}
               </TableCell>
               <TableCell sx={{ maxWidth: 420 }}>
