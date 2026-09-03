@@ -1,0 +1,62 @@
+# Headlamp Helm values that load the mirops plugin from its image.
+#
+# An initContainer copies the plugin from ghcr.io/miropshq/mirops-ui:dev
+# into a shared emptyDir volume, which Headlamp scans on startup.
+#
+# Install:
+#   helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/
+#   helm repo update
+#   helm install headlamp headlamp/headlamp -n headlamp --create-namespace \
+#     -f deploy/headlamp-values.yaml
+#
+# Access:
+#   kubectl -n headlamp port-forward svc/headlamp 8080:80
+#   open http://localhost:8080
+#
+# The image is private — create the ghcr pull secret first:
+#   kubectl create secret docker-registry ghcr-mirops \
+#     --namespace headlamp \
+#     --docker-server=ghcr.io \
+#     --docker-username=<github-user> \
+#     --docker-password=<PAT with read:packages>
+#
+# After CI pushes a new :dev image, refresh with:
+#   kubectl -n headlamp rollout restart deploy/headlamp
+
+# Pull secret for the private ghcr.io plugin image. Applied to the pod so it
+# covers both the main Headlamp image and the mirops-plugin initContainer.
+imagePullSecrets:
+  - name: ghcr-mirops
+
+config:
+  # Directory Headlamp scans for plugins on startup.
+  pluginsDir: /headlamp/plugins
+
+initContainers:
+  - name: mirops-plugin
+    image: ghcr.io/miropshq/mirops-headlamp-plugin:dev
+    imagePullPolicy: Always
+    env:
+      # Namespace where the mirops operator (and its mirops-reports Service) is
+      # installed. The plugin reads this to proxy report.json from the right
+      # place. Change it if you install the operator elsewhere (e.g. "miropssa").
+      - name: MIROPS_NAMESPACE
+        value: mirops
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /headlamp/plugins/mirops
+        cp -r /plugins/mirops/* /headlamp/plugins/mirops/
+        printf '{"reportsNamespace":"%s"}' "$MIROPS_NAMESPACE" > /headlamp/plugins/mirops/config.json
+    volumeMounts:
+      - name: plugins
+        mountPath: /headlamp/plugins
+
+volumeMounts:
+  - name: plugins
+    mountPath: /headlamp/plugins
+
+volumes:
+  - name: plugins
+    emptyDir: {}

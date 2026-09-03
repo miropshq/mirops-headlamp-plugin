@@ -25,8 +25,8 @@ const PHASE_COLOR: Record<RemediationPhase, 'default' | 'warning' | 'info' | 'su
 };
 
 export function RemediationPlanDetail() {
-  const { namespace, name } = useParams<{ namespace: string; name: string }>();
-  const [item, error] = RemediationPlan.useGet(name, namespace);
+  const { name } = useParams<{ name: string }>();
+  const [item, error] = RemediationPlan.useGet(name);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [patching, setPatching] = useState(false);
   const [patchError, setPatchError] = useState<string | null>(null);

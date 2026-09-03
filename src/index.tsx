@@ -39,7 +39,7 @@ registerRoute({
 });
 
 registerRoute({
-  path: '/mirops/upgrade-analyses/:namespace/:name',
+  path: '/mirops/upgrade-analyses/:name',
   sidebar: 'upgradeAnalyses',
   name: 'upgradeAnalysisDetail',
   exact: true,
@@ -47,7 +47,7 @@ registerRoute({
 });
 
 registerRoute({
-  path: '/mirops/remediation-plans/:namespace/:name',
+  path: '/mirops/remediation-plans/:name',
   sidebar: 'upgradeAnalyses',
   name: 'remediationPlanDetail',
   exact: true,

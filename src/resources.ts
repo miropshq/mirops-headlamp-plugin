@@ -8,6 +8,7 @@ const VERSION = 'v1';
 
 export interface UpgradeAnalysisSpec {
   targetVersion: string;
+  scoringProfile?: 'production' | 'non-production';
   scope?: {
     mode: 'all' | 'application';
     excludeNamespaces?: string[];
@@ -16,6 +17,7 @@ export interface UpgradeAnalysisSpec {
     enabled: boolean;
     provider?: 'anthropic' | 'openai';
     model?: string;
+    maxTokens?: number;
     credentialsSecret?: string;
     remediation?: {
       enabled: boolean;
@@ -27,7 +29,7 @@ export interface UpgradeAnalysisSpec {
     interval?: string;
   };
   source?: {
-    type: 'file' | 's3' | 'blob';
+    type: 'file' | 's3' | 'blob' | 'pvc';
     [key: string]: string | undefined;
   };
 }
@@ -39,8 +41,16 @@ export interface UpgradeAnalysisStatus {
   aiScore?: number;
   aiReasoning?: string;
   aiModel?: string;
+  aiError?: string;
+  addonsChecked?: number;
+  incompatibleAddons?: number;
   lastAnalysisTime?: string;
   reportPath?: string;
+  // Report write outcome (operator-set). When reportState === 'failed', the
+  // verdict is still valid but the report body may be unavailable.
+  reportState?: 'written' | 'failed';
+  reportError?: string;
+  reportLocation?: string;
   conditions?: {
     type: string;
     status: string;
@@ -59,7 +69,8 @@ export class UpgradeAnalysis extends KubeObject<UpgradeAnalysisType> {
   static kind = 'UpgradeAnalysis';
   static apiName = 'upgradeanalyses';
   static apiVersion = `${GROUP}/${VERSION}`;
-  static isNamespaced = true;
+  // Cluster-scoped: analyses the whole cluster, has no namespace.
+  static isNamespaced = false;
 
   get spec(): UpgradeAnalysisSpec {
     return this.jsonData.spec;
@@ -70,7 +81,7 @@ export class UpgradeAnalysis extends KubeObject<UpgradeAnalysisType> {
   }
 
   static get detailsRoute() {
-    return '/mirops/upgrade-analyses/:namespace/:name';
+    return '/mirops/upgrade-analyses/:name';
   }
 }
 
@@ -98,7 +109,8 @@ export class RemediationPlan extends KubeObject<RemediationPlanType> {
   static kind = 'RemediationPlan';
   static apiName = 'remediationplans';
   static apiVersion = `${GROUP}/${VERSION}`;
-  static isNamespaced = true;
+  // Cluster-scoped: remediates the whole cluster, has no namespace.
+  static isNamespaced = false;
 
   get spec(): RemediationPlanSpec {
     return this.jsonData.spec;
@@ -109,6 +121,6 @@ export class RemediationPlan extends KubeObject<RemediationPlanType> {
   }
 
   static get detailsRoute() {
-    return '/mirops/remediation-plans/:namespace/:name';
+    return '/mirops/remediation-plans/:name';
   }
 }
