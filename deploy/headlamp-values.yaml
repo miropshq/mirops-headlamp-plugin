@@ -1,7 +1,8 @@
 # Headlamp Helm values that load the mirops plugin from its image.
 #
-# An initContainer copies the plugin from ghcr.io/miropshq/mirops-ui:dev
-# into a shared emptyDir volume, which Headlamp scans on startup.
+# An initContainer copies the plugin from ghcr.io/miropshq/mirops-headlamp-plugin:latest
+# into a shared emptyDir volume, which Headlamp scans on startup. The image is
+# public, so no pull secret is required.
 #
 # Install:
 #   helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/
@@ -13,20 +14,8 @@
 #   kubectl -n headlamp port-forward svc/headlamp 8080:80
 #   open http://localhost:8080
 #
-# The image is private — create the ghcr pull secret first:
-#   kubectl create secret docker-registry ghcr-mirops \
-#     --namespace headlamp \
-#     --docker-server=ghcr.io \
-#     --docker-username=<github-user> \
-#     --docker-password=<PAT with read:packages>
-#
-# After CI pushes a new :dev image, refresh with:
+# After CI pushes a new :latest image, refresh with:
 #   kubectl -n headlamp rollout restart deploy/headlamp
-
-# Pull secret for the private ghcr.io plugin image. Applied to the pod so it
-# covers both the main Headlamp image and the mirops-plugin initContainer.
-imagePullSecrets:
-  - name: ghcr-mirops
 
 config:
   # Directory Headlamp scans for plugins on startup.
@@ -34,7 +23,7 @@ config:
 
 initContainers:
   - name: mirops-plugin
-    image: ghcr.io/miropshq/mirops-headlamp-plugin:dev
+    image: ghcr.io/miropshq/mirops-headlamp-plugin:latest
     imagePullPolicy: Always
     env:
       # Namespace where the mirops operator (and its mirops-reports Service) is
