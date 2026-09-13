@@ -116,7 +116,8 @@ function buildCR(f: FormState) {
   }
 
   const source: any = { type: f.sourceType };
-  if ((f.sourceType === 'file' || f.sourceType === 'pvc') && f.sourcePath) source.path = f.sourcePath;
+  if ((f.sourceType === 'file' || f.sourceType === 'pvc') && f.sourcePath)
+    source.path = f.sourcePath;
   if (f.sourceType === 's3') {
     if (f.sourceBucket) source.bucket = f.sourceBucket;
     if (f.sourceRegion) source.region = f.sourceRegion;
@@ -161,7 +162,10 @@ export function UpgradeAnalysisCreate() {
   }
 
   function removeNamespace(ns: string) {
-    set('excludeNamespaces', form.excludeNamespaces.filter(n => n !== ns));
+    set(
+      'excludeNamespaces',
+      form.excludeNamespaces.filter(n => n !== ns)
+    );
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -190,8 +194,11 @@ export function UpgradeAnalysisCreate() {
         New Upgrade Analysis
       </Typography>
 
-      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-
+      <Box
+        component="form"
+        onSubmit={handleSubmit}
+        sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
+      >
         {/* ── Identity ── */}
         {/* UpgradeAnalysis is cluster-scoped — no namespace field. */}
         <TextField
@@ -244,8 +251,16 @@ export function UpgradeAnalysisCreate() {
                 value={form.scopeMode}
                 onChange={e => set('scopeMode', e.target.value as any)}
               >
-                <FormControlLabel value="all" control={<Radio />} label="All (system + application)" />
-                <FormControlLabel value="application" control={<Radio />} label="Application (excludes system)" />
+                <FormControlLabel
+                  value="all"
+                  control={<Radio />}
+                  label="All (system + application)"
+                />
+                <FormControlLabel
+                  value="application"
+                  control={<Radio />}
+                  label="Application (excludes system)"
+                />
               </RadioGroup>
               <FormHelperText>
                 "all" includes kube-system and other system namespaces. "application" excludes them.
@@ -262,7 +277,12 @@ export function UpgradeAnalysisCreate() {
                   onChange={e => setNewNs(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addNamespace())}
                 />
-                <Button variant="outlined" size="small" startIcon={<Icon icon="mdi:plus" />} onClick={addNamespace}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Icon icon="mdi:plus" />}
+                  onClick={addNamespace}
+                >
                   Add
                 </Button>
               </Box>
@@ -271,8 +291,13 @@ export function UpgradeAnalysisCreate() {
                   <Box
                     key={ns}
                     sx={{
-                      display: 'flex', alignItems: 'center', gap: 0.5,
-                      bgcolor: 'action.selected', borderRadius: 1, px: 1, py: 0.25,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      bgcolor: 'action.selected',
+                      borderRadius: 1,
+                      px: 1,
+                      py: 0.25,
                     }}
                   >
                     <Typography variant="caption">{ns}</Typography>
@@ -294,7 +319,10 @@ export function UpgradeAnalysisCreate() {
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <FormControlLabel
               control={
-                <Switch checked={form.aiEnabled} onChange={e => set('aiEnabled', e.target.checked)} />
+                <Switch
+                  checked={form.aiEnabled}
+                  onChange={e => set('aiEnabled', e.target.checked)}
+                />
               }
               label="Enable AI scoring (base 70% + AI 30%)"
             />
@@ -343,7 +371,9 @@ export function UpgradeAnalysisCreate() {
                 />
 
                 <Divider />
-                <Typography variant="subtitle2" fontWeight={600}>Remediation</Typography>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  Remediation
+                </Typography>
 
                 <FormControlLabel
                   control={
@@ -451,19 +481,63 @@ export function UpgradeAnalysisCreate() {
 
             {form.sourceType === 's3' && (
               <>
-                <TextField label="Bucket" fullWidth value={form.sourceBucket} onChange={e => set('sourceBucket', e.target.value)} />
-                <TextField label="Region" fullWidth value={form.sourceRegion} onChange={e => set('sourceRegion', e.target.value)} />
-                <TextField label="Key" fullWidth value={form.sourceKey} onChange={e => set('sourceKey', e.target.value)} helperText="Object path within the bucket" />
-                <TextField label="Credentials Secret (optional)" fullWidth value={form.sourceCredentialsSecret} onChange={e => set('sourceCredentialsSecret', e.target.value)} helperText="Optional — leave empty to use IRSA (the pod's IAM role). Otherwise a Secret with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY." />
+                <TextField
+                  label="Bucket"
+                  fullWidth
+                  value={form.sourceBucket}
+                  onChange={e => set('sourceBucket', e.target.value)}
+                />
+                <TextField
+                  label="Region"
+                  fullWidth
+                  value={form.sourceRegion}
+                  onChange={e => set('sourceRegion', e.target.value)}
+                />
+                <TextField
+                  label="Key"
+                  fullWidth
+                  value={form.sourceKey}
+                  onChange={e => set('sourceKey', e.target.value)}
+                  helperText="Object path within the bucket"
+                />
+                <TextField
+                  label="Credentials Secret (optional)"
+                  fullWidth
+                  value={form.sourceCredentialsSecret}
+                  onChange={e => set('sourceCredentialsSecret', e.target.value)}
+                  helperText="Optional — leave empty to use IRSA (the pod's IAM role). Otherwise a Secret with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+                />
               </>
             )}
 
             {form.sourceType === 'blob' && (
               <>
-                <TextField label="Storage Account Name" fullWidth value={form.sourceAccountName} onChange={e => set('sourceAccountName', e.target.value)} helperText="The storage account name (e.g. miropsreports)" />
-                <TextField label="Container Name" fullWidth value={form.sourceContainerName} onChange={e => set('sourceContainerName', e.target.value)} />
-                <TextField label="Blob Name" fullWidth value={form.sourceBlobName} onChange={e => set('sourceBlobName', e.target.value)} />
-                <TextField label="Credentials Secret (optional)" fullWidth value={form.sourceCredentialsSecret} onChange={e => set('sourceCredentialsSecret', e.target.value)} helperText="Optional — leave empty to use Workload Identity / Managed Identity (UMI). Otherwise a Secret with AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID." />
+                <TextField
+                  label="Storage Account Name"
+                  fullWidth
+                  value={form.sourceAccountName}
+                  onChange={e => set('sourceAccountName', e.target.value)}
+                  helperText="The storage account name (e.g. miropsreports)"
+                />
+                <TextField
+                  label="Container Name"
+                  fullWidth
+                  value={form.sourceContainerName}
+                  onChange={e => set('sourceContainerName', e.target.value)}
+                />
+                <TextField
+                  label="Blob Name"
+                  fullWidth
+                  value={form.sourceBlobName}
+                  onChange={e => set('sourceBlobName', e.target.value)}
+                />
+                <TextField
+                  label="Credentials Secret (optional)"
+                  fullWidth
+                  value={form.sourceCredentialsSecret}
+                  onChange={e => set('sourceCredentialsSecret', e.target.value)}
+                  helperText="Optional — leave empty to use Workload Identity / Managed Identity (UMI). Otherwise a Secret with AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID."
+                />
               </>
             )}
           </AccordionDetails>

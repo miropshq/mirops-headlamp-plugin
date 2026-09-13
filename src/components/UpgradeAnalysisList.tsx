@@ -33,10 +33,7 @@ export function UpgradeAnalysisList() {
           label: 'Name',
           getValue: (item: UpgradeAnalysis) => item.metadata.name,
           render: (item: UpgradeAnalysis) => (
-            <Link
-              routeName="upgradeAnalysisDetail"
-              params={{ name: item.metadata.name }}
-            >
+            <Link routeName="upgradeAnalysisDetail" params={{ name: item.metadata.name }}>
               {item.metadata.name}
             </Link>
           ),

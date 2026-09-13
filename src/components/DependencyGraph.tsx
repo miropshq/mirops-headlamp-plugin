@@ -54,9 +54,7 @@ function filterByRisk(graph: ReportGraph, showAll: boolean, minRisk: number): Vi
     return { nodes: graph.nodes, dimmedIds: new Set() };
   }
 
-  const focusIds = new Set(
-    graph.nodes.filter(n => n.risk > 0 && n.risk >= minRisk).map(n => n.id)
-  );
+  const focusIds = new Set(graph.nodes.filter(n => n.risk > 0 && n.risk >= minRisk).map(n => n.id));
 
   const neighborIds = new Set<string>();
   for (const e of graph.edges) {
@@ -85,16 +83,13 @@ function buildNodes(visible: VisibleGraph): Node[] {
 
   // Compact the used columns to consecutive indices, so a missing layer (e.g. no network nodes)
   // doesn't leave an empty leading column that pushes everything right and stretches the edges.
-  const denseIndex = new Map(
-    [...byColumn.keys()].sort((a, b) => a - b).map((col, i) => [col, i])
-  );
+  const denseIndex = new Map([...byColumn.keys()].sort((a, b) => a - b).map((col, i) => [col, i]));
 
   const rfNodes: Node[] = [];
   for (const [col, list] of byColumn) {
     const x = (denseIndex.get(col) ?? 0) * COLUMN_GAP;
     list.sort(
-      (a, b) =>
-        (a.namespace ?? '').localeCompare(b.namespace ?? '') || a.name.localeCompare(b.name)
+      (a, b) => (a.namespace ?? '').localeCompare(b.namespace ?? '') || a.name.localeCompare(b.name)
     );
     list.forEach((n, row) => {
       const dimmed = visible.dimmedIds.has(n.id);
@@ -171,10 +166,7 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
   const [showAll, setShowAll] = useState(false);
   const [minRisk, setMinRisk] = useState(0);
 
-  const visible = useMemo(
-    () => filterByRisk(graph, showAll, minRisk),
-    [graph, showAll, minRisk]
-  );
+  const visible = useMemo(() => filterByRisk(graph, showAll, minRisk), [graph, showAll, minRisk]);
   // The computed layout is the starting point; useNodesState holds the live positions so nodes can
   // be dragged to untangle the graph by hand. Re-sync whenever the filter recomputes the layout.
   const computedNodes = useMemo(() => buildNodes(visible), [visible]);
@@ -201,11 +193,7 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
         <FormControlLabel
           control={
-            <Switch
-              size="small"
-              checked={showAll}
-              onChange={e => setShowAll(e.target.checked)}
-            />
+            <Switch size="small" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
           }
           label={<Typography variant="body2">Show all</Typography>}
         />
@@ -231,8 +219,8 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
         Failing workloads on the left, add-ons on the right; each node shows its risk value (0–100)
-        and severity, colored None→Critical; gray dashed nodes are healthy direct neighbors shown for
-        context; edges labeled by dependency type. Drag any node to untangle the layout.
+        and severity, colored None→Critical; gray dashed nodes are healthy direct neighbors shown
+        for context; edges labeled by dependency type. Drag any node to untangle the layout.
       </Typography>
       <Box sx={{ height: 520, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
         <ReactFlow

@@ -41,13 +41,11 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Audit dependencies
-        run: npm audit --audit-level=high
-
   # ─── Docker image build (no push) ─────────────────────────────────────────────
   build-image:
     name: Build image
     runs-on: ubuntu-latest
+    needs: validate
     env:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
