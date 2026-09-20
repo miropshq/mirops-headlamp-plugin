@@ -115,7 +115,9 @@ jobs:
   artifacthub:
     name: Publish to Artifact Hub
     runs-on: ubuntu-latest
-    needs: semantic-release
+    # Runs after the per-arch build matrix and before the final image manifest is pushed:
+    # build → artifacthub → push. Only publishes to the catalog once the images built cleanly.
+    needs: [semantic-release, build]
     if: needs.semantic-release.outputs.new_release_published == 'true'
     env:
       VERSION: ${{ needs.semantic-release.outputs.new_release_version }}
@@ -172,7 +174,7 @@ jobs:
   push:
     name: Push release image (merge manifest)
     runs-on: ubuntu-latest
-    needs: [build, semantic-release]
+    needs: [build, semantic-release, artifacthub]
     env:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
