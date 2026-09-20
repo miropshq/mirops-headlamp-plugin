@@ -31,6 +31,7 @@ import { riskSeverity } from '../riskColor';
 import { AddonStatus, Decision, NamespaceRisk, Report } from '../types';
 import { DependencyGraph } from './DependencyGraph';
 import { RiskBadge } from './RiskBadge';
+import { ScoreBreakdown } from './ScoreBreakdown';
 import { HealthBand, ScoreGauge } from './ScoreGauge';
 
 // Viewing a remote report can fail at the proxy with HTTP 502 carrying a JSON
@@ -1133,6 +1134,9 @@ export function UpgradeAnalysisDetail() {
                 />
               )}
             </Box>
+            {/* Score breakdown — the four readiness dimensions as status bars, right in the header
+                next to the gauge. Renders once the report is loaded (it carries the sub-scores). */}
+            {report && <ScoreBreakdown base={report.scores.base} ai={report.scores.ai} />}
             {/* Button first so it holds a stable position; the remediation link sits beside it and
                 appears (once the plan loads) without shifting the button. */}
             <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
@@ -1319,35 +1323,8 @@ export function UpgradeAnalysisDetail() {
                   </Grid>
                 </Grid>
 
-                {/* Score breakdown */}
-                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-                  Score Breakdown
-                </Typography>
-                <Grid container spacing={2} sx={{ mb: 3 }}>
-                  <Grid item xs={6} sm={2}>
-                    <MetricCard label="Total" value={report.scores.total} />
-                  </Grid>
-                  <Grid item xs={6} sm={2}>
-                    <MetricCard label="Health" value={report.scores.base.health} />
-                  </Grid>
-                  <Grid item xs={6} sm={2}>
-                    <MetricCard label="Capacity" value={report.scores.base.capacity} />
-                  </Grid>
-                  <Grid item xs={6} sm={2}>
-                    <MetricCard label="Stability" value={report.scores.base.stability} />
-                  </Grid>
-                  <Grid item xs={6} sm={2}>
-                    <MetricCard label="Compatibility" value={report.scores.base.compatibility} />
-                  </Grid>
-                  {report.scores.ai && (
-                    <Grid item xs={6} sm={2}>
-                      <MetricCard
-                        label={`AI (${report.scores.ai.model ?? 'model'})`}
-                        value={report.scores.ai.score}
-                      />
-                    </Grid>
-                  )}
-                </Grid>
+                {/* Score breakdown moved to the header (ScoreBreakdown, next to the gauge) so the
+                    four dimensions read at a glance above Findings. */}
 
                 <Divider sx={{ mb: 3 }} />
 
