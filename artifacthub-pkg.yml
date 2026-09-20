@@ -1,9 +1,13 @@
-# Artifact Hub package metadata for the Mirops Headlamp plugin — this is what makes
-# the plugin appear (and update) in Headlamp's in-app Plugin Catalog.
+# Artifact Hub package metadata for the Mirops Headlamp plugin — this is what makes the
+# plugin appear (and update) in Headlamp's in-app Plugin Catalog.
 #
-# The release workflow (.github/workflows/release.yaml) rewrites `version`, `createdAt`,
-# and the archive-url / archive-checksum annotations on every release, then commits this
-# file back — Artifact Hub re-scans the repo and lists the new version automatically.
+# NOTE: On `main` this file is a TEMPLATE. Its `version` and `archive-checksum` are
+# placeholders and are intentionally NOT updated here — `main` is PR-only, so CI cannot
+# push to it. On each release, the workflow (.github/workflows/release.yaml) fills in the
+# real version, checksum and archive-url and force-pushes the result to the dedicated
+# `artifacthub` branch. Artifact Hub is configured to scan the `artifacthub` branch (not
+# `main`), so the catalog always reflects the latest release. Think of `main` as the source
+# and `artifacthub` as the published output (like a gh-pages branch).
 version: 0.1.0
 name: mirops
 displayName: Mirops
