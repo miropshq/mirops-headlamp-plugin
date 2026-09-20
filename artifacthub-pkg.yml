@@ -1,0 +1,40 @@
+# Artifact Hub package metadata for the Mirops Headlamp plugin — this is what makes
+# the plugin appear (and update) in Headlamp's in-app Plugin Catalog.
+#
+# The release workflow (.github/workflows/release.yaml) rewrites `version`, `createdAt`,
+# and the archive-url / archive-checksum annotations on every release, then commits this
+# file back — Artifact Hub re-scans the repo and lists the new version automatically.
+version: 0.1.0
+name: mirops
+displayName: Mirops
+createdAt: "2026-09-20T00:00:00Z"
+# Logo shown in the Artifact Hub / Headlamp catalog card. Commit the image to the repo
+# (e.g. docs/logo.png) and reference its raw URL. Must be a public, direct image URL.
+logoURL: https://raw.githubusercontent.com/miropshq/mirops-headlamp-plugin/main/docs/logo.png
+description: |
+  Visualize Kubernetes upgrade readiness inside Headlamp — the logical mirror, the
+  SAFE/WARNING/CRITICAL verdict, the score breakdown, add-on compatibility, the
+  per-namespace risk heatmap and dependency graph, plus review and approve
+  operator-proposed remediation plans.
+license: Apache-2.0
+homeURL: https://github.com/miropshq/mirops-headlamp-plugin
+links:
+  - name: source
+    url: https://github.com/miropshq/mirops-headlamp-plugin
+  - name: docs
+    url: https://github.com/miropshq/mirops-docs
+keywords:
+  - kubernetes
+  - kubernetes-upgrade
+  - mirops
+  - headlamp
+  - upgrade-readiness
+# Shown in the package gallery. Commit the images to the repo (e.g. docs/) and use raw URLs.
+screenshots:
+  - title: Upgrade Analysis — verdict and score breakdown
+    url: https://raw.githubusercontent.com/miropshq/mirops-headlamp-plugin/main/docs/score-breakdown.png
+annotations:
+  headlamp/plugin/archive-url: "https://github.com/miropshq/mirops-headlamp-plugin/releases/download/v0.1.0/mirops-0.1.0.tar.gz"
+  headlamp/plugin/archive-checksum: "SHA256:REPLACE_ON_RELEASE"
+  headlamp/plugin/version-compat: ">=0.25.0"
+  headlamp/plugin/distro-compat: "in-cluster,web,docker-desktop,desktop"

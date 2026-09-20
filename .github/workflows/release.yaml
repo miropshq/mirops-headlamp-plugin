@@ -107,6 +107,66 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.tag_suffix }}
           cache-to: type=gha,mode=max,scope=${{ matrix.tag_suffix }}
 
+  # ─── Publish to Artifact Hub (Headlamp Plugin Catalog) ─────────────────────────
+  # Packages the plugin as a tarball, attaches it to the GitHub Release, and updates
+  # artifacthub-pkg.yml (version + archive url/checksum). Artifact Hub re-scans the repo
+  # and lists the new version in Headlamp's in-app Plugin Catalog — no manual step per
+  # release (the repo is registered on artifacthub.io once).
+  artifacthub:
+    name: Publish to Artifact Hub
+    runs-on: ubuntu-latest
+    needs: semantic-release
+    if: needs.semantic-release.outputs.new_release_published == 'true'
+    env:
+      VERSION: ${{ needs.semantic-release.outputs.new_release_version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Package the plugin tarball
+        run: |
+          npx headlamp-plugin package . out
+          echo "TARBALL=$(ls out/*.tar.gz)" >> "$GITHUB_ENV"
+
+      - name: Attach tarball to the release
+        run: gh release upload "v${VERSION}" "$TARBALL" --clobber
+
+      - name: Update artifacthub-pkg.yml
+        run: |
+          SHA=$(sha256sum "$TARBALL" | awk '{print $1}')
+          URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/$(basename "$TARBALL")"
+          sed -i "s|^version: .*|version: ${VERSION}|" artifacthub-pkg.yml
+          sed -i "s|^createdAt: .*|createdAt: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"|" artifacthub-pkg.yml
+          sed -i "s|headlamp/plugin/archive-url: .*|headlamp/plugin/archive-url: \"${URL}\"|" artifacthub-pkg.yml
+          sed -i "s|headlamp/plugin/archive-checksum: .*|headlamp/plugin/archive-checksum: \"SHA256:${SHA}\"|" artifacthub-pkg.yml
+
+      - name: Publish metadata to the artifacthub branch
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Artifact Hub scans a dedicated 'artifacthub' branch — we never push to protected main,
+          # and pushing here doesn't re-trigger this workflow (it runs on main only). Point the repo's
+          # "Branch" to 'artifacthub' in its Artifact Hub settings. Images/logo stay on main (the
+          # logoURL/screenshots are absolute raw URLs), so only the two metadata files live here.
+          git checkout -B artifacthub
+          git add --force artifacthub-pkg.yml artifacthub-repo.yml
+          git commit -m "chore(artifacthub): publish v${VERSION}" || echo "metadata unchanged"
+          git push --force origin artifacthub
+
   # ─── Merge manifest list ────────────────────────────────────────────────────
   # Combines both architecture tags into a manifest list with the final tags.
   push:
