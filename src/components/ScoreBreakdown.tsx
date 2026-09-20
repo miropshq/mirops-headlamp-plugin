@@ -28,7 +28,11 @@ interface Props {
 
 // band maps a fill ratio to a MUI semantic palette key so the color is theme-aware and
 // consistent with the readiness gauge (healthy → success, attention → warning, low → error).
-function band(ratio: number): { palette: 'success' | 'warning' | 'error'; icon: string; aria: string } {
+function band(ratio: number): {
+  palette: 'success' | 'warning' | 'error';
+  icon: string;
+  aria: string;
+} {
   if (ratio >= 0.85) return { palette: 'success', icon: '✓', aria: 'healthy' };
   if (ratio >= 0.6) return { palette: 'warning', icon: '⚠', aria: 'needs attention' };
   return { palette: 'error', icon: '✕', aria: 'low' };
