@@ -2,7 +2,7 @@ import { useReport } from './reports';
 import { ClusterMirror } from './resources';
 import { MirrorReport } from './types';
 
-// The ClusterMirror the Helm chart creates. The plugin treats it as "the" mirror when there are several.
+// The name users give their main ClusterMirror. The plugin treats it as "the" mirror when there are several.
 export const DEFAULT_MIRROR_NAME = 'default';
 
 // A mirror's report on the reports service (the operator writes <name>.mirror; analyses use .mirops).

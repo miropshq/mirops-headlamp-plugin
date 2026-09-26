@@ -17,8 +17,8 @@ spec:
   refresh:
     interval: 5m`;
 
-// ClusterMirrorList is the Mirops landing page. Almost every install has exactly one mirror (the
-// "default" one the Helm chart creates), so that case opens it directly instead of a one-row table.
+// ClusterMirrorList is the Mirops landing page. Almost every install has exactly one mirror (usually
+// named "default"), so that case opens it directly instead of a one-row table.
 export function ClusterMirrorList() {
   const { mirrors, error } = useDefaultMirror();
 
@@ -39,9 +39,9 @@ export function ClusterMirrorList() {
       <SectionBox title="Cluster Mirror">
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 760 }}>
           <Typography variant="body2">
-            There&apos;s no ClusterMirror in this cluster. The Helm chart creates one named
-            &quot;default&quot; unless <code>mirror.default.enabled</code> is false. To create one
-            by hand:
+            There&apos;s no ClusterMirror in this cluster. mirops doesn&apos;t create one — like an
+            UpgradeAnalysis, you create it after installing. Name it &quot;default&quot; so Headlamp
+            and mirops-cli pick it first:
           </Typography>
           <Box
             component="pre"
