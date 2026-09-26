@@ -8,10 +8,10 @@
 # `artifacthub` branch. Artifact Hub is configured to scan the `artifacthub` branch (not
 # `main`), so the catalog always reflects the latest release. Think of `main` as the source
 # and `artifacthub` as the published output (like a gh-pages branch).
-version: 0.1.0
+version: 0.3.0
 name: mirops
 displayName: Mirops
-createdAt: "2026-09-20T00:00:00Z"
+createdAt: "2026-09-26T07:42:24Z"
 # Logo shown in the Artifact Hub / Headlamp catalog card. Commit the image to the repo
 # (e.g. docs/logo.png) and reference its raw URL. Must be a public, direct image URL.
 logoURL: https://raw.githubusercontent.com/miropshq/mirops-headlamp-plugin/main/docs/logo.png
@@ -44,7 +44,7 @@ screenshots:
   - title: Upgrade analysis turned off
     url: https://raw.githubusercontent.com/miropshq/mirops-headlamp-plugin/main/docs/upgrade-analysis-disabled.png
 annotations:
-  headlamp/plugin/archive-url: "https://github.com/miropshq/mirops-headlamp-plugin/releases/download/v0.1.0/mirops-0.1.0.tar.gz"
-  headlamp/plugin/archive-checksum: "SHA256:REPLACE_ON_RELEASE"
+  headlamp/plugin/archive-url: "https://github.com/miropshq/mirops-headlamp-plugin/releases/download/v0.3.0/mirops-0.3.0.tar.gz"
+  headlamp/plugin/archive-checksum: "SHA256:791018c47adcfe75147c3ca41a270696b6fdeb730fcfb3dbc9ba6204797af4b6"
   headlamp/plugin/version-compat: ">=0.25.0"
   headlamp/plugin/distro-compat: "in-cluster,web,docker-desktop,desktop"
