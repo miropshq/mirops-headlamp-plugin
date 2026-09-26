@@ -40,8 +40,8 @@ export function ClusterMirrorList() {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 760 }}>
           <Typography variant="body2">
             There&apos;s no ClusterMirror in this cluster. mirops doesn&apos;t create one — like an
-            UpgradeAnalysis, you create it after installing. Name it &quot;default&quot; so Headlamp
-            and mirops-cli pick it first:
+            UpgradeAnalysis, you create it after installing. Name it &quot;default&quot; so this page
+            opens it first:
           </Typography>
           <Box
             component="pre"
