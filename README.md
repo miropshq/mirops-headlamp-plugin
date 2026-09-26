@@ -1,5 +1,7 @@
 # Mirops Headlamp plugin
 
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/mirops)](https://artifacthub.io/packages/headlamp/mirops/mirops)
+
 A [Headlamp](https://headlamp.dev/) plugin (React + TypeScript) that visualizes the output of the
 **mirops** Kubernetes operator. Its core value is the part a terminal can't show: it **draws the
 dependency graph** of your cluster and shows where risk sits right now, and — when upgrade analysis is
@@ -111,6 +113,25 @@ open http://localhost:8080
 ```
 
 After CI pushes a new image, refresh with `kubectl -n headlamp rollout restart deploy/headlamp`.
+
+### From Artifact Hub
+
+The plugin is published on [Artifact Hub](https://artifacthub.io/packages/headlamp/mirops/mirops) under the mirops organization.
+
+- **Headlamp desktop:** open **Plugin Catalog**, search for **Mirops**, and install it.
+- **In-cluster Headlamp:** let Headlamp's chart install it with its plugin manager:
+
+  ```yaml
+  pluginsManager:
+    enabled: true
+    configContent: |
+      plugins:
+        - name: mirops
+          source: https://artifacthub.io/packages/headlamp/mirops/mirops
+          version: 0.3.0
+  ```
+
+Installed from Artifact Hub, the plugin has no `config.json`, so it reads the reports from the `mirops` namespace. If the operator runs elsewhere, use the image install above and set `MIROPS_NAMESPACE`.
 
 ### Configuring the operator's namespace
 
