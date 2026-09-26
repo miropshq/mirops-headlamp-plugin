@@ -1,4 +1,3 @@
-import { ApiProxy, Router } from '@kinvolk/headlamp-plugin/lib';
 import { Link, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Alert from '@mui/material/Alert';
 import AlertTitle from '@mui/material/AlertTitle';
@@ -11,44 +10,27 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
-import FormControlLabel from '@mui/material/FormControlLabel';
 import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
-import Switch from '@mui/material/Switch';
-import Tab from '@mui/material/Tab';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
-import TablePagination from '@mui/material/TablePagination';
 import TableRow from '@mui/material/TableRow';
-import Tabs from '@mui/material/Tabs';
 import Typography from '@mui/material/Typography';
-import React, { useEffect, useState } from 'react';
-import { useHistory, useParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { componentLabel } from '../format';
+import { useDefaultMirror } from '../mirror';
+import { useReport } from '../reports';
 import { RemediationPlan, UpgradeAnalysis } from '../resources';
-import { riskSeverity } from '../riskColor';
-import { AddonStatus, Decision, NamespaceRisk, Report } from '../types';
+import { AddonImpact, AddonStatus, Decision, Report } from '../types';
 import { DependencyGraph } from './DependencyGraph';
-import { RiskBadge } from './RiskBadge';
+import { IssuesSection } from './IssuesSection';
+import { NamespaceRiskHeatmap } from './NamespaceRiskHeatmap';
 import { ScoreBreakdown } from './ScoreBreakdown';
 import { HealthBand, ScoreGauge } from './ScoreGauge';
-
-// Viewing a remote report can fail at the proxy with HTTP 502 carrying a JSON
-// body { error, location, detail }. Surface `detail` (the actionable cause)
-// when present; fall back to the raw error message otherwise.
-function extractReportError(e: any): string {
-  const raw = e?.message ?? String(e);
-  try {
-    const body = JSON.parse(raw);
-    if (body && typeof body === 'object' && body.detail) {
-      return body.location ? `${body.detail} (${body.location})` : body.detail;
-    }
-  } catch {
-    /* not JSON — use the raw message */
-  }
-  return raw;
-}
+import { WorkloadsData } from './WorkloadsData';
 
 function MetricCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -63,96 +45,20 @@ function MetricCard({ label, value }: { label: string; value: string | number })
   );
 }
 
-// A crashing workload can produce dozens of rows (a Deployment with 15 CrashLoopBackOff pods, one
-// Issue line per pod). Rather than render every row at once — which turns the report into an endless
-// scroll — long lists are paged into chunks of RESOURCE_PAGE_SIZE with a range pager ("1–12 of N").
-const RESOURCE_PAGE_SIZE = 12;
-
-// A single Deployment can own dozens of failing pods (a 15-replica CrashLoopBackOff). Listing them
-// all inside one table cell makes that row taller than the whole rest of the report, so the cell
-// shows this many by default behind a "Show N more" / "Show less" toggle (see ProblemPodsCell).
-const NESTED_POD_CAP = 6;
-
-// usePaginated slices `rows` into the current page. `page` is clamped in render so shrinking the list
-// (e.g. toggling "Only show problems") can never leave the pager pointing past the last page.
-function usePaginated<T>(rows: T[], pageSize = RESOURCE_PAGE_SIZE) {
-  const [page, setPage] = useState(1);
-  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
-  const current = Math.min(page, pageCount);
-  const start = (current - 1) * pageSize;
-  return {
-    items: rows.slice(start, start + pageSize),
-    page: current,
-    setPage,
-    pageCount,
-    pageSize,
-    total: rows.length,
-  };
-}
-
-// PaginationBar is the range-style pager Headlamp uses on its own tables ("1–12 of 40  ‹ ›"). It's
-// MUI's TablePagination rendered standalone (component="div") below a table, with the rows-per-page
-// selector hidden. It removes itself when everything fits on one page, so short lists are untouched.
-function PaginationBar({
-  page,
-  pageSize,
-  total,
-  onChange,
-}: {
-  page: number;
-  pageSize: number;
-  total: number;
-  onChange: (p: number) => void;
-}) {
-  if (total <= pageSize) return null;
-  return (
-    <TablePagination
-      component="div"
-      count={total}
-      page={page - 1}
-      rowsPerPage={pageSize}
-      rowsPerPageOptions={[]}
-      onPageChange={(_, p) => onChange(p + 1)}
-    />
-  );
-}
-
-// IssuesSection lists the report's issues, one alert per line. A single crashing Deployment emits one
-// issue per pod, so this is the list most likely to run into the dozens — it's paged like the tables.
-function IssuesSection({ issues }: { issues?: string[] }) {
-  const pg = usePaginated(issues ?? []);
-  if (!issues || issues.length === 0) return null;
-  return (
-    <Box>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Issues
-      </Typography>
-      {pg.items.map((issue, i) => (
-        <Alert key={i} severity="warning" sx={{ mb: 1 }}>
-          {issue}
-        </Alert>
-      ))}
-      <PaginationBar page={pg.page} pageSize={pg.pageSize} total={pg.total} onChange={pg.setPage} />
-    </Box>
-  );
-}
-
 const ADDON_STATUS_COLOR: Record<AddonStatus, 'success' | 'error' | 'default'> = {
   compatible: 'success',
   incompatible: 'error',
   unknown: 'default',
 };
 
-function AddonCompatibilityTable({ report, embedded }: { report: Report; embedded?: boolean }) {
+function AddonCompatibilityTable({ report }: { report: Report }) {
   const addons = report.addons ?? [];
   if (addons.length === 0) return null;
   return (
-    <Box sx={{ mb: embedded ? 0 : 3 }}>
-      {!embedded && (
-        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-          Add-on Compatibility
-        </Typography>
-      )}
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+        Add-on compatibility with {report.targetVersion}
+      </Typography>
       <Table size="small">
         <TableHead>
           <TableRow>
@@ -190,252 +96,6 @@ function AddonCompatibilityTable({ report, embedded }: { report: Report; embedde
           ))}
         </TableBody>
       </Table>
-    </Box>
-  );
-}
-
-// Synthetic bucket holding cluster-scoped components (Nodes) — not a real
-// Namespace, so it isn't navigable and is sorted last with distinct styling.
-const CLUSTER_SCOPED_BUCKET = 'cluster-scoped';
-
-// The operator serves the report (<name>.mirops) from an in-cluster Service named
-// 'mirops-reports'. UpgradeAnalysis is cluster-scoped so it no longer carries a
-// namespace to locate it, and the operator can be installed in any namespace.
-// The deployer sets that namespace in headlamp-values.yaml; the initContainer
-// writes it to a config.json next to the plugin, which we read at runtime. This
-// default is the fallback when no config.json is present.
-const REPORTS_SERVICE_NAME = 'mirops-reports';
-const REPORTS_SERVICE_NAMESPACE = 'mirops';
-
-// Read the operator's namespace from the plugin's runtime config.json (written
-// by the Helm initContainer from headlamp-values.yaml). Falls back to the
-// default until/unless the file resolves.
-function useReportsNamespace(): string {
-  const [namespace, setNamespace] = useState(REPORTS_SERVICE_NAMESPACE);
-  useEffect(() => {
-    fetch('/plugins/mirops/config.json')
-      .then(r => (r.ok ? r.json() : null))
-      .then(cfg => {
-        if (cfg?.reportsNamespace) setNamespace(cfg.reportsNamespace);
-      })
-      .catch(() => {
-        /* no config.json — keep the default */
-      });
-  }, []);
-  return namespace;
-}
-
-function NamespaceRiskHeatmap({
-  byNamespace,
-  embedded,
-}: {
-  byNamespace: NamespaceRisk[];
-  embedded?: boolean;
-}) {
-  const history = useHistory();
-  if (byNamespace.length === 0) return null;
-  const sorted = [...byNamespace].sort((a, b) => {
-    // Keep the synthetic cluster-scoped tile last regardless of risk.
-    const aSynthetic = a.namespace === CLUSTER_SCOPED_BUCKET;
-    const bSynthetic = b.namespace === CLUSTER_SCOPED_BUCKET;
-    if (aSynthetic !== bSynthetic) return aSynthetic ? 1 : -1;
-    return b.risk - a.risk;
-  });
-  return (
-    <Box sx={{ mb: embedded ? 0 : 3 }}>
-      {!embedded && (
-        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-          Namespace Risk
-        </Typography>
-      )}
-      <Grid container spacing={2}>
-        {sorted.map(ns => {
-          const isClusterScoped = ns.namespace === CLUSTER_SCOPED_BUCKET;
-          const navigable = !isClusterScoped;
-          return (
-            <Grid item xs={6} sm={4} md={2} key={ns.namespace}>
-              <Paper
-                variant="outlined"
-                onClick={
-                  navigable
-                    ? () => history.push(Router.createRouteURL('namespace', { name: ns.namespace }))
-                    : undefined
-                }
-                sx={{
-                  p: 2,
-                  textAlign: 'center',
-                  borderLeft: '4px solid',
-                  borderLeftColor: riskSeverity(ns.risk).color,
-                  borderStyle: isClusterScoped ? 'dashed' : 'solid',
-                  bgcolor: isClusterScoped ? 'action.hover' : undefined,
-                  cursor: navigable ? 'pointer' : 'default',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 0.5,
-                }}
-              >
-                <RiskBadge risk={ns.risk} />
-                <Typography variant="body2" noWrap>
-                  {isClusterScoped ? 'cluster-scoped' : ns.namespace}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {ns.atRisk}/{ns.components} at risk
-                </Typography>
-              </Paper>
-            </Grid>
-          );
-        })}
-      </Grid>
-    </Box>
-  );
-}
-
-function WorkloadTable({
-  title,
-  rows,
-  columns,
-}: {
-  title: string;
-  rows: any[];
-  columns: { label: string; key: string }[];
-}) {
-  if (!rows || rows.length === 0) return null;
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        {title}
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            {columns.map(c => (
-              <TableCell key={c.key}>{c.label}</TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((row, i) => (
-            <TableRow key={i}>
-              {columns.map(c => (
-                <TableCell key={c.key}>{String(row[c.key] ?? '-')}</TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Box>
-  );
-}
-
-interface WorkloadRow {
-  namespace: string;
-  name: string;
-  pods?: { name: string; reason?: string; restarts: number }[];
-}
-
-// ProblemPodsCell renders a workload's failing pods, collapsed to NESTED_POD_CAP so one busy
-// Deployment (15 CrashLoopBackOff replicas) can't outgrow the whole table. The "Show N more" toggle
-// expands the full list in place and flips to "Show less", so the detail is one click away — not lost.
-function ProblemPodsCell({
-  namespace,
-  pods,
-}: {
-  namespace: string;
-  pods: { name: string; reason?: string; restarts: number }[];
-}) {
-  const [expanded, setExpanded] = useState(false);
-  if (pods.length === 0) return <>—</>;
-  const shown = expanded ? pods : pods.slice(0, NESTED_POD_CAP);
-  const hidden = pods.length - NESTED_POD_CAP;
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-      {shown.map(p => (
-        <Box key={p.name} sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Link routeName="Pod" params={{ namespace, name: p.name }}>
-            {p.name}
-          </Link>
-          {p.reason && <Chip label={p.reason} size="small" color="warning" variant="outlined" />}
-          {p.restarts > 0 && (
-            <Typography variant="caption" color="text.secondary">
-              {p.restarts} restarts
-            </Typography>
-          )}
-        </Box>
-      ))}
-      {hidden > 0 && (
-        <Typography
-          variant="caption"
-          onClick={() => setExpanded(e => !e)}
-          sx={{
-            cursor: 'pointer',
-            color: 'primary.main',
-            width: 'fit-content',
-            '&:hover': { textDecoration: 'underline' },
-          }}
-        >
-          {expanded ? 'Show less' : `Show ${hidden} more`}
-        </Typography>
-      )}
-    </Box>
-  );
-}
-
-// Renders a workload table where the namespace, the workload and each problem
-// pod link to their Headlamp detail view, so the user can jump straight to the
-// resource instead of just reading a name.
-function WorkloadSection<T extends WorkloadRow>({
-  title,
-  routeName,
-  rows,
-  status,
-}: {
-  title: string;
-  routeName: 'Deployment' | 'StatefulSet' | 'DaemonSet' | 'Job';
-  rows: T[];
-  status: (row: T) => string;
-}) {
-  const p = usePaginated(rows ?? []);
-  if (!rows || rows.length === 0) return null;
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        {title}
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Namespace</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell>Problem pods</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {p.items.map((row, i) => {
-            const problemPods = (row.pods ?? []).filter(p => p.reason || p.restarts > 0);
-            return (
-              <TableRow key={i}>
-                <TableCell>
-                  <Link routeName="namespace" params={{ name: row.namespace }}>
-                    {row.namespace}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <Link routeName={routeName} params={{ namespace: row.namespace, name: row.name }}>
-                    {row.name}
-                  </Link>
-                </TableCell>
-                <TableCell>{status(row)}</TableCell>
-                <TableCell>
-                  <ProblemPodsCell namespace={row.namespace} pods={problemPods} />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-      <PaginationBar page={p.page} pageSize={p.pageSize} total={p.total} onChange={p.setPage} />
     </Box>
   );
 }
@@ -540,395 +200,130 @@ function Findings({ blockers, warnings }: { blockers: string[]; warnings: string
   );
 }
 
-const PVC_PHASE_COLOR: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
-  Bound: 'success',
-  Pending: 'warning',
-  Lost: 'error',
-};
+// How many affected components UpgradeImpact names before "and N more".
+const IMPACT_SHOWN = 8;
 
-// PVCTable lists every PersistentVolumeClaim with its phase, so a Lost or Pending claim is visible
-// in the data section (not only as a graph node). Lost/Pending are the ones that block or warn on
-// an upgrade — a drained node can't reattach storage that isn't Bound.
-function PVCTable({ rows }: { rows: NonNullable<Report['workloads']['pvcs']> }) {
-  const pg = usePaginated(rows ?? []);
-  if (!rows || rows.length === 0) return null;
+// UpgradeImpact is the upgrade's own blast radius: for each add-on the target version breaks, what
+// depends on it. Nothing renders when no add-on is incompatible (or the report predates the field).
+function UpgradeImpact({
+  impact,
+  targetVersion,
+}: {
+  impact: AddonImpact[];
+  targetVersion: string;
+}) {
+  if (impact.length === 0) return null;
   return (
     <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Persistent Volume Claims
+      <Typography variant="subtitle1" fontWeight={600}>
+        Upgrade impact
       </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Namespace</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>Storage Class</TableCell>
-            <TableCell>Status</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {pg.items.map((p, i) => (
-            <TableRow key={i}>
-              <TableCell>
-                <Link routeName="namespace" params={{ name: p.namespace }}>
-                  {p.namespace}
-                </Link>
-              </TableCell>
-              <TableCell>
-                <Link
-                  routeName="persistentVolumeClaim"
-                  params={{ namespace: p.namespace, name: p.name }}
-                >
-                  {p.name}
-                </Link>
-              </TableCell>
-              <TableCell>{p.storageClass || '—'}</TableCell>
-              <TableCell>
-                <Chip
-                  label={p.phase}
-                  size="small"
-                  color={PVC_PHASE_COLOR[p.phase] ?? 'default'}
-                  variant={p.phase === 'Bound' ? 'outlined' : 'filled'}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <PaginationBar page={pg.page} pageSize={pg.pageSize} total={pg.total} onChange={pg.setPage} />
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        What depends on each add-on that Kubernetes {targetVersion} breaks.
+      </Typography>
+      {impact.map(i => {
+        const affected = i.affected ?? [];
+        return (
+          <Paper
+            key={i.addon}
+            variant="outlined"
+            sx={{ p: 2, mb: 1, display: 'flex', gap: 3, flexWrap: 'wrap' }}
+          >
+            <Box sx={{ minWidth: 200 }}>
+              <Typography variant="body1" fontWeight={600}>
+                {i.addon} {i.version}
+              </Typography>
+              {i.requiredVersion && (
+                <Typography variant="body2" color="text.secondary">
+                  Needs {i.requiredVersion} for Kubernetes {targetVersion}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+                {affected.length === 0
+                  ? 'Nothing depends on it'
+                  : `${affected.length} component${
+                      affected.length === 1 ? ' depends' : 's depend'
+                    } on it`}
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                {affected.slice(0, IMPACT_SHOWN).map(id => (
+                  <Chip
+                    key={id}
+                    label={componentLabel(id)}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontFamily: 'monospace' }}
+                  />
+                ))}
+                {affected.length > IMPACT_SHOWN && (
+                  <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
+                    and {affected.length - IMPACT_SHOWN} more
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          </Paper>
+        );
+      })}
     </Box>
   );
 }
 
-// NodesTable lists cluster nodes with their status. A large cluster has hundreds of nodes, so the
-// list is paged like the workload tables.
-function NodesTable({ rows }: { rows: Report['workloads']['nodes'] }) {
-  const pg = usePaginated(rows ?? []);
-  if (!rows || rows.length === 0) return null;
+// UpgradeChecks are the metrics that only matter because of the upgrade: removed APIs and add-on
+// issues for the new version, and the headroom and stability the node drain depends on. Pod counts
+// are the cluster's current state and live in the mirror.
+function UpgradeChecks({ report }: { report: Report }) {
+  const m = report.metrics;
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const checks: [string, string | number][] = [
+    ['Deprecated APIs', m.compatibility.deprecatedApis],
+    ['Add-on Issues', m.compatibility.addonIssues],
+    ['CPU Pressure', pct(m.resources.cpuPressure)],
+    ['Memory Pressure', pct(m.resources.memoryPressure)],
+    ['Pod Drop Ratio', pct(m.stability.podDropRatio)],
+    ['Restart Delta', m.stability.restartDelta],
+  ];
   return (
     <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Nodes
+      <Typography variant="subtitle1" fontWeight={600}>
+        Upgrade checks
       </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>Status</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {pg.items.map(n => (
-            <TableRow key={n.name}>
-              <TableCell>
-                <Link routeName="node" params={{ name: n.name }}>
-                  {n.name}
-                </Link>
-              </TableCell>
-              <TableCell>{n.status}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <PaginationBar page={pg.page} pageSize={pg.pageSize} total={pg.total} onChange={pg.setPage} />
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        What draining the nodes and the new version depend on.
+      </Typography>
+      <Grid container spacing={2}>
+        {checks.map(([label, value]) => (
+          <Grid item xs={6} sm={4} md={2} key={label}>
+            <MetricCard label={label} value={value} />
+          </Grid>
+        ))}
+      </Grid>
     </Box>
   );
 }
 
-// WorkloadsData is the report's raw workload inventory (nodes, deployments, PVCs, deprecated APIs).
-// A "Only show problems" toggle — on by default — hides the healthy rows that otherwise dominate
-// the tables (Ready nodes, fully-ready deployments, Bound PVCs), so what needs attention isn't
-// buried. StatefulSets/DaemonSets/Jobs/Deprecated APIs already carry only problems from the
-// operator, so the toggle doesn't touch them.
-function WorkloadsData({ report }: { report: Report }) {
-  const [onlyProblems, setOnlyProblems] = useState(true);
-  const w = report.workloads;
-  const nodes = onlyProblems ? w.nodes.filter(n => n.status !== 'Ready') : w.nodes;
-  const deployments = onlyProblems
-    ? w.deployments.filter(d => d.readyReplicas < d.desiredReplicas)
-    : w.deployments;
-  const pvcs = onlyProblems ? (w.pvcs ?? []).filter(p => p.phase !== 'Bound') : w.pvcs ?? [];
-  const barePods = onlyProblems
-    ? (w.barePods ?? []).filter(p => p.status !== 'Running')
-    : w.barePods ?? [];
-
+// LegacyClusterState keeps the cluster-state sections for reports from operators before 0.2.0, which
+// have no ClusterMirror to show them in.
+function LegacyClusterState({ report }: { report: Report }) {
+  const byNamespace = report.risk?.byNamespace ?? [];
+  const hasChains = (report.graph?.edges?.length ?? 0) > 0;
   return (
     <>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography variant="subtitle1" fontWeight={600}>
-          Workloads
-        </Typography>
-        <FormControlLabel
-          control={
-            <Switch
-              size="small"
-              checked={onlyProblems}
-              onChange={e => setOnlyProblems(e.target.checked)}
-            />
-          }
-          label={<Typography variant="body2">Only show problems</Typography>}
-        />
-      </Box>
-
-      <NodesTable rows={nodes} />
-
-      <WorkloadSection
-        title="Deployments"
-        routeName="Deployment"
-        rows={deployments}
-        status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
-      />
-      <WorkloadSection
-        title="StatefulSets"
-        routeName="StatefulSet"
-        rows={w.statefulsets}
-        status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
-      />
-      <WorkloadSection
-        title="DaemonSets"
-        routeName="DaemonSet"
-        rows={w.daemonsets}
-        status={d => `${d.numberUnavailable} unavailable`}
-      />
-      <WorkloadSection
-        title="Jobs"
-        routeName="Job"
-        rows={w.jobs}
-        status={j =>
-          j.status === 'Failed'
-            ? `failed${j.reason ? ` (${j.reason})` : ''}`
-            : `${j.active} active — healthy, but may be interrupted by the upgrade`
-        }
-      />
-      <BarePodsTable rows={barePods} />
-      <PVCTable rows={pvcs} />
-      {w.deprecatedApis && w.deprecatedApis.length > 0 && (
-        <WorkloadTable
-          title="Deprecated APIs"
-          rows={w.deprecatedApis}
-          columns={[
-            { label: 'Group', key: 'group' },
-            { label: 'Version', key: 'version' },
-            { label: 'Resource', key: 'resource' },
-            { label: 'Removed In', key: 'removedIn' },
-          ]}
-        />
+      <Divider sx={{ mb: 3 }} />
+      <NamespaceRiskHeatmap byNamespace={byNamespace} />
+      {hasChains && report.graph && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+            Dependency Graph
+          </Typography>
+          <DependencyGraph graph={report.graph} />
+        </Box>
       )}
+      <WorkloadsData workloads={report.workloads} />
+      <IssuesSection issues={report.issues} />
     </>
-  );
-}
-
-const BARE_POD_STATUS_COLOR: Record<string, 'success' | 'error' | 'default'> = {
-  Running: 'success',
-  Down: 'error',
-};
-
-// BarePodsTable lists standalone pods (no owning workload — `kubectl run`, raw Pod manifests).
-// They aren't covered by any Deployment/StatefulSet row, so a failing bare pod would otherwise be
-// invisible in the data section. A "Down" (not-ready) one is the case that matters for an upgrade.
-function BarePodsTable({ rows }: { rows: NonNullable<Report['workloads']['barePods']> }) {
-  const pg = usePaginated(rows ?? []);
-  if (!rows || rows.length === 0) return null;
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Standalone Pods
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Namespace</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>Status</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {pg.items.map((p, i) => (
-            <TableRow key={i}>
-              <TableCell>
-                <Link routeName="namespace" params={{ name: p.namespace }}>
-                  {p.namespace}
-                </Link>
-              </TableCell>
-              <TableCell>
-                <Link routeName="Pod" params={{ namespace: p.namespace, name: p.name }}>
-                  {p.name}
-                </Link>
-              </TableCell>
-              <TableCell>
-                <Chip
-                  label={p.status}
-                  size="small"
-                  color={BARE_POD_STATUS_COLOR[p.status] ?? 'default'}
-                  variant={p.status === 'Running' ? 'outlined' : 'filled'}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <PaginationBar page={pg.page} pageSize={pg.pageSize} total={pg.total} onChange={pg.setPage} />
-    </Box>
-  );
-}
-
-// GraphEmptyState is what the Dependency Graph tab shows when there are no dependency chains (no
-// edges). Most add-ons are isolated, so unless something actually depends on an at-risk component
-// (a Lost PVC, a down node, istio sidecars, a TLS ingress → workloads) there is no blast radius to
-// draw. Rather than a lone node in an empty canvas, explain why and point back to the add-on table.
-function GraphEmptyState({
-  hasAddonIssue,
-  onGoToAddons,
-}: {
-  hasAddonIssue: boolean;
-  onGoToAddons: () => void;
-}) {
-  return (
-    <Box sx={{ textAlign: 'center', py: 6, px: 2 }}>
-      <Box
-        component="svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.6}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        sx={{ width: 44, height: 44, color: 'text.disabled', mb: 1 }}
-      >
-        <path d="M9 17H7A5 5 0 0 1 7 7" />
-        <path d="M15 7h2a5 5 0 0 1 4 8" />
-        <line x1="8" y1="12" x2="12" y2="12" />
-        <line x1="2" y1="2" x2="22" y2="22" />
-      </Box>
-      <Typography variant="subtitle1" fontWeight={600} color="text.secondary" gutterBottom>
-        No dependency chains
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 520, mx: 'auto', mb: 2 }}>
-        Nothing in this cluster depends on the at-risk components, so there&apos;s no blast radius
-        to draw.{hasAddonIssue && ' The at-risk add-on is listed under Add-on Compatibility.'}
-      </Typography>
-      {hasAddonIssue && (
-        <Button variant="contained" size="small" onClick={onGoToAddons}>
-          Go to Add-on Compatibility
-        </Button>
-      )}
-    </Box>
-  );
-}
-
-// RiskCompatibilityTabs collapses the three lenses on the logical mirror — Add-on Compatibility,
-// Namespace Risk, and the Dependency Graph — into one tabbed section (switch, don't scroll through
-// three stacked blocks). It opens context-aware: on the add-on tab when something is incompatible
-// (a hard blocker), otherwise namespace risk; never the graph, which is often empty. Each tab
-// carries a count badge. The graph tab is conditional — dimmed, and clicking it shows a "no
-// dependency chains" empty-state — whenever the graph has no edges.
-function RiskCompatibilityTabs({ report }: { report: Report }) {
-  const addons = report.addons ?? [];
-  const byNamespace = report.risk?.byNamespace ?? [];
-  const graph = report.graph;
-
-  const hasAddons = addons.length > 0;
-  const hasNamespaces = byNamespace.length > 0;
-  const hasGraph = !!graph && graph.nodes.length > 0;
-
-  const incompatibleCount = addons.filter(a => a.status === 'incompatible').length;
-  const atRiskNamespaces = byNamespace.filter(n => n.atRisk > 0).length;
-  const chainCount = graph?.edges?.length ?? 0;
-  const hasChains = chainCount > 0;
-
-  // Context-aware default: land on whatever is wrong. Incompatible add-ons first (a hard blocker),
-  // then namespace risk; never default to the graph.
-  const defaultTab: 'addon' | 'ns' | 'graph' =
-    incompatibleCount > 0 && hasAddons
-      ? 'addon'
-      : hasNamespaces
-      ? 'ns'
-      : hasAddons
-      ? 'addon'
-      : 'graph';
-  const [tab, setTab] = useState<'addon' | 'ns' | 'graph'>(defaultTab);
-
-  if (!hasAddons && !hasNamespaces && !hasGraph) return null;
-
-  const chipSx = { ml: 0.75, height: 18, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } };
-
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Risk &amp; Compatibility
-      </Typography>
-      <Tabs
-        value={tab}
-        onChange={(_, v) => setTab(v)}
-        variant="scrollable"
-        scrollButtons="auto"
-        sx={{ borderBottom: 1, borderColor: 'divider', minHeight: 40 }}
-      >
-        {hasAddons && (
-          <Tab
-            value="addon"
-            sx={{ minHeight: 40, textTransform: 'none' }}
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                Add-on Compatibility
-                {incompatibleCount > 0 && (
-                  <Chip label={incompatibleCount} size="small" color="error" sx={chipSx} />
-                )}
-              </Box>
-            }
-          />
-        )}
-        {hasNamespaces && (
-          <Tab
-            value="ns"
-            sx={{ minHeight: 40, textTransform: 'none' }}
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                Namespace Risk
-                {atRiskNamespaces > 0 && (
-                  <Chip label={atRiskNamespaces} size="small" color="warning" sx={chipSx} />
-                )}
-              </Box>
-            }
-          />
-        )}
-        {hasGraph && (
-          <Tab
-            value="graph"
-            // Dimmed (not disabled) when there are no chains, so it stays clickable and can explain
-            // why it's empty instead of just being unavailable.
-            sx={{ minHeight: 40, textTransform: 'none', opacity: hasChains ? 1 : 0.55 }}
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                Dependency Graph
-                <Chip
-                  label={`${chainCount} ${chainCount === 1 ? 'chain' : 'chains'}`}
-                  size="small"
-                  variant="outlined"
-                  sx={chipSx}
-                />
-              </Box>
-            }
-          />
-        )}
-      </Tabs>
-      <Box sx={{ pt: 2 }}>
-        {tab === 'addon' && hasAddons && <AddonCompatibilityTable report={report} embedded />}
-        {tab === 'ns' && hasNamespaces && (
-          <NamespaceRiskHeatmap byNamespace={byNamespace} embedded />
-        )}
-        {tab === 'graph' &&
-          hasGraph &&
-          (hasChains ? (
-            <DependencyGraph graph={graph!} />
-          ) : (
-            <GraphEmptyState
-              hasAddonIssue={incompatibleCount > 0}
-              onGoToAddons={() => setTab('addon')}
-            />
-          ))}
-      </Box>
-    </Box>
   );
 }
 
@@ -936,76 +331,24 @@ export function UpgradeAnalysisDetail() {
   const { name } = useParams<{ name: string }>();
   const [item, error] = UpgradeAnalysis.useGet(name);
   const [plans] = RemediationPlan.useList();
-  const reportsNamespace = useReportsNamespace();
-  const [report, setReport] = useState<Report | null>(null);
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
+  const { mirror } = useDefaultMirror();
   const [showRawJson, setShowRawJson] = useState(false);
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
-  // Re-arm the report poll only when a *new* report is actually expected — the CR first loads
-  // (hasItem), a fresh analysis completes (lastAnalysisTime changes), or a write fails
-  // (reportState). Depending on the whole `item` re-ran this on every watch tick (status
-  // heartbeats, observedGeneration bumps), which reset the view to "Generating…" over and over.
-  const hasItem = !!item;
-  const pollReportState = item?.status?.reportState;
-  const pollLastAnalysis = item?.status?.lastAnalysisTime;
-
-  useEffect(() => {
-    if (!hasItem || !name) return;
-
-    // Poll the report endpoint rather than trusting a single read: right after an analysis the
-    // export may still be in flight (the object isn't in storage yet → 404) and the CR watch can
-    // lag, so a one-shot fetch gets stuck on "Generating…". Retry quietly until the report is
-    // available; only surface an error after the operator reports a hard failure or retries run out.
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    let attempts = 0;
-    const maxAttempts = 20; // ~1 min at 3s
-
-    // The operator serves reports from an in-cluster service not reachable from the browser
-    // directly; route through the Kubernetes API server service proxy via Headlamp's backend.
-    // Reports use the `.mirops` extension (JSON content) for every destination, local included.
-    const path =
-      `/api/v1/namespaces/${reportsNamespace}/services/${REPORTS_SERVICE_NAME}:8084` +
-      `/proxy/reports/${name}.mirops`;
-
-    setReportLoading(true);
-    setReportError(null);
-    setReport(null);
-
-    const attempt = () => {
-      // Hard failure recorded by the operator (banner above): stop retrying.
-      if (pollReportState === 'failed') {
-        if (!cancelled) setReportLoading(false);
-        return;
-      }
-      ApiProxy.request(path)
-        .then((data: Report) => {
-          if (cancelled) return;
-          setReport(data);
-          setReportLoading(false);
-        })
-        .catch(e => {
-          if (cancelled) return;
-          attempts += 1;
-          if (attempts >= maxAttempts) {
-            setReportError(extractReportError(e));
-            setReportLoading(false);
-          } else {
-            timer = setTimeout(attempt, 3000); // report not written yet — keep waiting
-          }
-        });
-    };
-    attempt();
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [name, reportsNamespace, hasItem, pollLastAnalysis, pollReportState]);
+  // Re-arm the report poll only when a *new* report is expected — a fresh analysis completes
+  // (lastAnalysisTime changes) or a write fails (reportState, which also stops the retries). Reports
+  // use the `.mirops` extension (JSON content) for every destination, local included.
+  const {
+    report,
+    error: reportError,
+    loading: reportLoading,
+  } = useReport<Report>(name ? `${name}.mirops` : undefined, {
+    enabled: !!item,
+    refreshKey: item?.status?.lastAnalysisTime,
+    failed: item?.status?.reportState === 'failed',
+  });
 
   if (error) return <Alert severity="error">{String(error)}</Alert>;
   if (!item) return <CircularProgress />;
@@ -1266,77 +609,44 @@ export function UpgradeAnalysisDetail() {
             {reportError && <Alert severity="warning">Could not load report: {reportError}</Alert>}
             {report && (
               <>
+                {/* The cluster's current state (workloads, problems, namespace risk, the graph) lives
+                in the mirror; this report shows only what the upgrade adds. */}
+                {report.kind && mirror && (
+                  <Alert
+                    severity="info"
+                    sx={{ mb: 3 }}
+                    action={
+                      <Link routeName="clusterMirrorDetail" params={{ name: mirror.metadata.name }}>
+                        Open Cluster Mirror →
+                      </Link>
+                    }
+                  >
+                    The cluster&apos;s state — workloads, problems, namespace risk and the full
+                    dependency graph — is in Cluster Mirror.
+                  </Alert>
+                )}
+
                 {/* One consolidated Findings block: blockers (must fix) and warnings (don't block),
                 for every verdict — so the report always says what's wrong and whether it stops the
-                upgrade. The data sections below (metrics, breakdown, add-ons, risk, graph) follow. */}
+                upgrade. A current-state problem that blocks the upgrade (a Lost PVC) is listed here
+                too, since it explains the verdict; its detail is in the mirror. */}
                 <Findings
                   blockers={report.decision.blockers ?? []}
                   warnings={buildWarnings(report, score, safeThreshold)}
                 />
 
-                {/* Metrics grid */}
-                <Grid container spacing={2} sx={{ mb: 3 }}>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard label="Total Pods" value={report.metrics.pods.total} />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard label="Not Ready" value={report.metrics.pods.notReady} />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard label="Restarts" value={report.metrics.pods.restarts} />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard
-                      label="Deprecated APIs"
-                      value={report.metrics.compatibility.deprecatedApis}
-                    />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard
-                      label="CPU Pressure"
-                      value={`${(report.metrics.resources.cpuPressure * 100).toFixed(1)}%`}
-                    />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard
-                      label="Memory Pressure"
-                      value={`${(report.metrics.resources.memoryPressure * 100).toFixed(1)}%`}
-                    />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard
-                      label="Pod Drop Ratio"
-                      value={`${(report.metrics.stability.podDropRatio * 100).toFixed(1)}%`}
-                    />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard
-                      label="Restart Delta"
-                      value={report.metrics.stability.restartDelta}
-                    />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <MetricCard
-                      label="Add-on Issues"
-                      value={report.metrics.compatibility.addonIssues}
-                    />
-                  </Grid>
-                </Grid>
+                <UpgradeImpact
+                  impact={report.upgradeImpact ?? []}
+                  targetVersion={report.targetVersion}
+                />
 
-                {/* Score breakdown moved to the header (ScoreBreakdown, next to the gauge) so the
-                    four dimensions read at a glance above Findings. */}
+                <AddonCompatibilityTable report={report} />
 
-                <Divider sx={{ mb: 3 }} />
+                <UpgradeChecks report={report} />
 
-                {/* Logical mirror — one tabbed section (add-on compatibility · namespace risk ·
-                dependency graph) with a context-aware default and a conditional graph tab. */}
-                <RiskCompatibilityTabs report={report} />
-
-                {/* Workloads — raw inventory with an "only problems" toggle */}
-                <WorkloadsData report={report} />
-
-                {/* Issues — paged, one CrashLoopBackOff pod per line can be dozens of entries */}
-                <IssuesSection issues={report.issues} />
+                {/* Operators before 0.2.0 have no mirror, so their reports keep the cluster-state
+                sections here. */}
+                {!report.kind && <LegacyClusterState report={report} />}
 
                 {/* AI Reasoning from report */}
                 {report.aiReasoning && !status.aiReasoning && (

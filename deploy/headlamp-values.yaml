@@ -27,8 +27,8 @@ initContainers:
     imagePullPolicy: Always
     env:
       # Namespace where the mirops operator (and its mirops-reports Service) is
-      # installed. The plugin reads this to proxy report.json from the right
-      # place. Change it if you install the operator elsewhere (e.g. "miropssa").
+      # installed. The plugin reads this to proxy the reports (<name>.mirror,
+      # <name>.mirops) from the right place. Change it if you install the operator elsewhere (e.g. "miropssa").
       - name: MIROPS_NAMESPACE
         value: mirops
     command:

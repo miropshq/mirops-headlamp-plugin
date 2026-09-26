@@ -24,7 +24,9 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import React, { useState } from 'react';
 import { useHistory } from 'react-router-dom';
+import { useUpgradeState } from '../mirror';
 import { UpgradeAnalysis } from '../resources';
+import { UpgradeDisabled } from './UpgradeDisabled';
 
 interface FormState {
   name: string;
@@ -148,6 +150,7 @@ export function UpgradeAnalysisCreate() {
   const [newNs, setNewNs] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const upgrade = useUpgradeState();
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -186,6 +189,12 @@ export function UpgradeAnalysisCreate() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Reached directly by URL while upgrade analysis is off: the analysis would never run, so explain
+  // that instead of offering the form.
+  if (upgrade.state === 'disabled') {
+    return <UpgradeDisabled mirrorName={upgrade.mirrorName} atRisk={upgrade.atRisk} />;
   }
 
   return (

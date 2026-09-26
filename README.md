@@ -1,32 +1,51 @@
-# mirops Headlamp plugin
+# Mirops Headlamp plugin
+
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/mirops)](https://artifacthub.io/packages/headlamp/mirops/mirops)
 
 A [Headlamp](https://headlamp.dev/) plugin (React + TypeScript) that visualizes the output of the
 **mirops** Kubernetes operator. Its core value is the part a terminal can't show: it **draws the
-dependency graph** of your cluster and renders the upgrade decision, add-on compatibility, and
-per-namespace risk.
+dependency graph** of your cluster and shows where risk sits right now, and — when upgrade analysis is
+on — whether the cluster is ready for a new Kubernetes version.
 
-mirops analyses whether a Kubernetes cluster is ready to upgrade to a target version. This plugin
-surfaces that analysis inside Headlamp, next to the live cluster it already talks to.
+The plugin adds a **Mirops** sidebar section with two pages:
+
+- **Cluster Mirror** (the landing page) — the cluster's state right now, from the always-on
+  `ClusterMirror`.
+- **Upgrade Analyses** — what a version upgrade adds on top: the verdict, add-on compatibility,
+  removed APIs and drain blockers.
 
 ---
 
 ## Features
 
+### Cluster Mirror
+
+- **Live header** — when the mirror was last rebuilt, how often it rebuilds, its scope, and a
+  **Refresh now** button (sets the `mirops.io/refresh` annotation). Rebuild errors show inline.
+- **Summary** — components, dependencies, components at risk, and namespaces at risk.
+- **Namespace risk** — a heatmap of the highest component risk per namespace, worst first.
+- **At-risk components** — every component with risk 50 or higher, what depends on it, and where its
+  risk comes from — plus the full **dependency graph** on demand.
+- **Problems right now**, **add-ons detected**, and the **workload inventory**.
+- **Several mirrors** — one mirror opens directly; with several, a list (the one named `default`
+  opens first). With none, the page shows the YAML to create one.
+
+### Upgrade Analyses
+
+- **Only what the upgrade adds** — the cluster's current state (workloads, problems, namespace risk,
+  the graph) lives on the Cluster Mirror page, linked from each analysis. Reports from operators before
+  0.2.0 still show those sections in the analysis.
+- **Turned-off notice** — when the operator runs with upgrade analysis off (Helm
+  `upgrade.enabled=false`), the list and the create form say so and show the command to turn it on,
+  instead of an analysis that would never finish.
 - **Upgrade decision** — a condition-driven verdict (`SAFE | WARNING | CRITICAL | ERROR`) with a
   unified **Findings** panel listing every blocker and warning.
 - **Readiness score** — a 0–100 gauge on its own health axis, separate from the verdict, so a healthy
-  number never contradicts a blocked upgrade.
-- **Risk & Compatibility** — one tabbed section switching between **Add-on Compatibility**, **Namespace
-  Risk** (heatmap), and the **Dependency Graph**. It opens on whatever is wrong (context-aware) and each
-  tab carries a count badge.
-- **Dependency graph** — `graph.nodes` + `graph.edges`, nodes colored by **risk** (CVSS-style), shaped
-  by **type** (`workload | network | addon | config | storage | infra`), and labeled with the **risk
-  value** on each node. Conditional: when nothing depends on the at-risk components it dims and shows a
-  *no dependency chains* state instead of a lone node.
+  number never contradicts a blocked upgrade, with the score breakdown as status bars.
+- **Upgrade impact** — for each add-on the target version breaks, everything that depends on it.
 - **Add-on compatibility** — a table flagging incompatible add-ons and the version to upgrade to.
-- **Workloads & metrics** — deployments, statefulsets, daemonsets, jobs, **PVCs** (with phase),
-  **standalone pods**, and deprecated APIs — behind an *only show problems* toggle — plus pod health,
-  resource pressure, and stability deltas. Long tables and the issue list **paginate**.
+- **Upgrade checks** — deprecated APIs, add-on issues, CPU/memory pressure, pod drop and restarts: what
+  draining the nodes and the new version depend on.
 - **AI insights** — surfaces AI reasoning/score when enabled, and an explicit banner when the AI
   call failed (e.g. insufficient credit).
 - **Remediation plans** — review, approve, and selectively execute operator-proposed actions.
@@ -37,27 +56,39 @@ surfaces that analysis inside Headlamp, next to the live cluster it already talk
 
 ## Custom Resources
 
-The plugin reads two **cluster-scoped** CRDs from the mirops operator (group `mirops.mirops.io/v1`):
+The plugin reads three **cluster-scoped** CRDs from the mirops operator (group `mirops.mirops.io/v1`):
 
 | Kind | Purpose |
 | --- | --- |
+| `ClusterMirror` | The always-on mirror of the cluster: dependency graph and current risk. |
 | `UpgradeAnalysis` | Requests/holds the upgrade-readiness analysis for the whole cluster. |
 | `RemediationPlan` | Operator-proposed remediation actions, gated on approval. |
 
-Both are **cluster-scoped** (they analyse/remediate the whole cluster, so they have no namespace).
+All three are **cluster-scoped** (they model/analyse/remediate the whole cluster, so they have no
+namespace). The operator creates none of them for you except RemediationPlans.
 
-### Two data sources
+### Data sources
 
-- **The report** (`<name>.mirops`, JSON content) — the full mirror (`graph`, `risk`, `addons`),
-  `decision`, scores, metrics, and workloads. Served by the operator's in-cluster HTTP endpoint (or
-  read back from S3 / Azure Blob / PVC). The plugin reaches it through the Kubernetes API server's
-  service proxy.
-- **`UpgradeAnalysis` CR status** — status-only fields not in the report: `aiError`, `aiScore`,
-  `aiModel`, `addonsChecked`, `incompatibleAddons`, `reportPath`, `lastAnalysisTime`, and a mirrored
-  `decision`.
+- **The mirror report** (`<name>.mirror`) — the current state: `summary`, `atRisk`, `risk`, `addons`,
+  `workloads`, `issues`, `graph`, and `upgrade` (whether upgrade analysis is on). The Cluster Mirror
+  page reads it, and Upgrade Analyses reads its `upgrade.enabled` to show the turned-off notice.
+- **The upgrade report** (`<name>.mirops`) — the `decision`, scores, add-on compatibility, removed
+  APIs and drain blockers of one analysis.
+- **CR status** — the mirror's `lastSync`, `syncError` and counters; the analysis's status-only
+  fields: `aiError`, `aiScore`, `aiModel`, `addonsChecked`, `incompatibleAddons`, `lastAnalysisTime`,
+  and a mirrored `decision`.
 
-The plugin prefers the report for everything it has and uses the CR status only for the
-status-only fields (notably `aiError`).
+Both reports come from the operator's in-cluster reports service (`mirops-reports`), which reads remote
+destinations (S3 / Azure Blob / PVC) back with the operator's own credentials. The plugin reaches it
+through the Kubernetes API server's service proxy, so the browser never needs storage credentials.
+
+### Operator versions
+
+| Plugin | Operator | Notes |
+| --- | --- | --- |
+| `0.3.0` | `0.2.0` | Cluster Mirror page. With an older operator the Cluster Mirror page says it needs 0.2.0, and Upgrade Analyses keeps working. |
+| `0.2.0` | `0.1.0` | Score breakdown as status bars. |
+| `0.1.0` | `0.1.0` | Initial release. |
 
 ---
 
@@ -83,9 +114,28 @@ open http://localhost:8080
 
 After CI pushes a new image, refresh with `kubectl -n headlamp rollout restart deploy/headlamp`.
 
+### From Artifact Hub
+
+The plugin is published on [Artifact Hub](https://artifacthub.io/packages/headlamp/mirops/mirops) under the mirops organization.
+
+- **Headlamp desktop:** open **Plugin Catalog**, search for **Mirops**, and install it.
+- **In-cluster Headlamp:** let Headlamp's chart install it with its plugin manager:
+
+  ```yaml
+  pluginsManager:
+    enabled: true
+    configContent: |
+      plugins:
+        - name: mirops
+          source: https://artifacthub.io/packages/headlamp/mirops/mirops
+          version: 0.3.0
+  ```
+
+Installed from Artifact Hub, the plugin has no `config.json`, so it reads the reports from the `mirops` namespace. If the operator runs elsewhere, use the image install above and set `MIROPS_NAMESPACE`.
+
 ### Configuring the operator's namespace
 
-`UpgradeAnalysis` is cluster-scoped, so it doesn't tell the plugin where the operator's report
+The mirops CRs are cluster-scoped, so they don't tell the plugin where the operator's report
 Service (`mirops-reports`) lives. Set that namespace once in
 [deploy/headlamp-values.yaml](deploy/headlamp-values.yaml):
 
@@ -98,7 +148,8 @@ initContainers:
 ```
 
 The `initContainer` writes that value to a `config.json` next to the plugin, which the plugin reads
-at runtime to proxy the report (`<name>.mirops`) from the right place. **If unset, it defaults to `mirops`.**
+at runtime to proxy the reports (`<name>.mirror`, `<name>.mirops`) from the right place. **If unset,
+it defaults to `mirops`.**
 
 ---
 
@@ -150,16 +201,17 @@ Requires Node `>=18 <=22`.
 
 | Path | What |
 | --- | --- |
-| [src/types.ts](src/types.ts) | Contract types (`Report`, `Decision`, …). |
+| [src/types.ts](src/types.ts) | Contract types (`Report`, `MirrorReport`, `Decision`, …). |
 | [src/resources.ts](src/resources.ts) | CR resource classes (Kubernetes API). |
+| [src/reports.ts](src/reports.ts) · [src/mirror.ts](src/mirror.ts) | Report fetching through the service proxy; picking the mirror. |
 | [src/index.tsx](src/index.tsx) | Sidebar + route registration. |
 | [src/riskColor.ts](src/riskColor.ts) | Risk → severity/color mapping. |
+| [src/components/ClusterMirrorList.tsx](src/components/ClusterMirrorList.tsx) · [ClusterMirrorDetail.tsx](src/components/ClusterMirrorDetail.tsx) | The Cluster Mirror page. |
 | [src/components/DependencyGraph.tsx](src/components/DependencyGraph.tsx) | The dependency graph. |
-| [src/components/UpgradeAnalysisDetail.tsx](src/components/UpgradeAnalysisDetail.tsx) | Detail view. |
+| [src/components/UpgradeAnalysisDetail.tsx](src/components/UpgradeAnalysisDetail.tsx) | Upgrade analysis detail view. |
 | [src/components/UpgradeAnalysisCreate.tsx](src/components/UpgradeAnalysisCreate.tsx) | Create form. |
+| [src/components/UpgradeDisabled.tsx](src/components/UpgradeDisabled.tsx) | The "upgrade analysis is turned off" notice. |
 | [src/components/DecisionChip.tsx](src/components/DecisionChip.tsx) · [ScoreGauge.tsx](src/components/ScoreGauge.tsx) · [RiskChip.tsx](src/components/RiskChip.tsx) · [RiskBadge.tsx](src/components/RiskBadge.tsx) | Badges & gauges. |
-
-See [CLAUDE.md](CLAUDE.md) for deeper contract notes and invariants to preserve.
 
 ---
 

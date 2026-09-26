@@ -85,6 +85,56 @@ export class UpgradeAnalysis extends KubeObject<UpgradeAnalysisType> {
   }
 }
 
+// ─── ClusterMirror ────────────────────────────────────────────────────────────
+
+export interface ClusterMirrorSpec {
+  scope?: {
+    mode: 'all' | 'application';
+    excludeNamespaces?: string[];
+  };
+  refresh?: {
+    mode?: 'interval';
+    // Go duration as serialized by the API, e.g. "5m0s".
+    interval?: string;
+  };
+}
+
+export interface ClusterMirrorStatus {
+  components?: number;
+  edges?: number;
+  atRisk?: number;
+  lastSync?: string;
+  byNamespace?: { namespace: string; maxRisk: number; atRisk: number }[];
+  // Set when the last rebuild (or writing its report) failed.
+  syncError?: string;
+  observedGeneration?: number;
+}
+
+export interface ClusterMirrorType extends KubeObjectInterface {
+  spec: ClusterMirrorSpec;
+  status?: ClusterMirrorStatus;
+}
+
+export class ClusterMirror extends KubeObject<ClusterMirrorType> {
+  static kind = 'ClusterMirror';
+  static apiName = 'clustermirrors';
+  static apiVersion = `${GROUP}/${VERSION}`;
+  // Cluster-scoped: mirrors the whole cluster, has no namespace.
+  static isNamespaced = false;
+
+  get spec(): ClusterMirrorSpec {
+    return this.jsonData.spec;
+  }
+
+  get status(): ClusterMirrorStatus | undefined {
+    return this.jsonData.status;
+  }
+
+  static get detailsRoute() {
+    return '/mirops/mirror/:name';
+  }
+}
+
 // ─── RemediationPlan ──────────────────────────────────────────────────────────
 
 export interface RemediationPlanSpec {
