@@ -77,8 +77,20 @@ export interface NamespaceRisk {
   atRisk: number;
 }
 
+// The upgrade's own blast radius: an add-on the target version breaks and everything that
+// depends on it (component ids like "Deployment/shop/frontend").
+export interface AddonImpact {
+  addon: string;
+  version?: string;
+  requiredVersion?: string;
+  affected?: string[];
+}
+
 // Report JSON shape served by the operator HTTP endpoint
 export interface Report {
+  // "UpgradeAnalysis" from operator 0.2.0 on; absent on older operators, which also still carry the
+  // cluster-state sections (workloads, issues, namespace risk, graph) that now live in the mirror.
+  kind?: 'UpgradeAnalysis';
   generatedAt: string;
   cluster: string;
   clusterVersion: string;
@@ -174,4 +186,58 @@ export interface Report {
   addons?: AddonReport[];
   graph?: ReportGraph;
   risk?: { byNamespace: NamespaceRisk[] };
+  upgradeImpact?: AddonImpact[];
+}
+
+export type ReportWorkloads = Report['workloads'];
+
+// ─── ClusterMirror report (<name>.mirror) ─────────────────────────────────────
+// The cluster's current state, whatever version comes next. Everything tied to a target version
+// (verdict, score, add-on compatibility, removed APIs, PDBs for the drain) stays in the upgrade report.
+
+// A component at risk (>= 50), with where the risk comes from and what depends on it.
+export interface AtRiskComponent {
+  id: string;
+  kind: string;
+  name: string;
+  namespace?: string;
+  status?: string;
+  risk: number;
+  // Set when the component's own state is fine and it is at risk only because a dependency is.
+  inheritedFrom?: string;
+  // Every component that depends on this one, directly or transitively.
+  dependents?: string[];
+}
+
+// One UpgradeAnalysis as of the mirror's last rebuild.
+export interface UpgradeAnalysisSummary {
+  name: string;
+  targetVersion: string;
+  decision?: Decision;
+  score: number;
+  lastAnalysisTime?: string;
+  report: string;
+}
+
+export interface MirrorReport {
+  kind: 'ClusterMirror';
+  generatedAt: string;
+  mirror: string;
+  clusterVersion: string;
+  // Whether this install runs upgrade analysis (Helm upgrade.enabled). Always present.
+  upgrade: { enabled: boolean; analyses?: UpgradeAnalysisSummary[]; error?: string };
+  summary: {
+    components: number;
+    edges: number;
+    atRisk: number;
+    namespaces: number;
+    namespacesAtRisk: number;
+  };
+  pods: { total: number; notReady: number; restarts: number; restarting?: number };
+  atRisk?: AtRiskComponent[];
+  risk?: { byNamespace: NamespaceRisk[] };
+  addons?: { name: string; namespace?: string; version?: string }[];
+  workloads: ReportWorkloads;
+  issues?: string[];
+  graph?: ReportGraph;
 }
