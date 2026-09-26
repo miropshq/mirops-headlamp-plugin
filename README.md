@@ -1,4 +1,4 @@
-# mirops Headlamp plugin
+# Mirops Headlamp plugin
 
 A [Headlamp](https://headlamp.dev/) plugin (React + TypeScript) that visualizes the output of the
 **mirops** Kubernetes operator. Its core value is the part a terminal can't show: it **draws the
