@@ -30,11 +30,13 @@ links:
     url: https://github.com/miropshq/mirops-docs
 keywords:
   - kubernetes
-  - kubernetes-upgrade
   - mirops
   - headlamp
-  - upgrade-readiness
+  - cluster-mirror
   - dependency-graph
+  - blast-radius
+  - kubernetes-upgrade
+  - upgrade-readiness
 # Shown in the package gallery. Commit the images to the repo (e.g. docs/) and use raw URLs.
 screenshots:
   - title: Cluster Mirror — namespace risk and at-risk components
