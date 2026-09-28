@@ -14,7 +14,7 @@ import Typography from '@mui/material/Typography';
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { componentLabel, durationLabel, parseGoDuration, timeAgo } from '../format';
-import { mirrorReportFile } from '../mirror';
+import { mirrorReportAlias, mirrorReportFile } from '../mirror';
 import { useReport } from '../reports';
 import { ClusterMirror } from '../resources';
 import { AtRiskComponent, MirrorReport } from '../types';
@@ -202,8 +202,7 @@ function SectionTitle({ title, caption }: { title: string; caption?: string }) {
 
 // ClusterMirrorDetail is the always-on view of the cluster: its dependency graph and current risk,
 // rebuilt by the operator on an interval. It carries no target version and no verdict — that is
-// Upgrade Analyses' job. The name comes from the route, or from ClusterMirrorList when the cluster has
-// a single mirror and the list opens it directly.
+// Upgrade Analyses' job. The name comes from the route, or from a caller that passes it.
 export function ClusterMirrorDetail({ name: nameProp }: { name?: string }) {
   const params = useParams<{ name: string }>();
   const name = nameProp ?? params.name;
@@ -219,6 +218,7 @@ export function ClusterMirrorDetail({ name: nameProp }: { name?: string }) {
     error: reportError,
     loading,
   } = useReport<MirrorReport>(name ? mirrorReportFile(name) : undefined, {
+    fallbackFile: name ? mirrorReportAlias(name) : undefined,
     enabled: !!item,
     refreshKey: item?.status?.lastSync,
     resetOnRefresh: false,
@@ -293,6 +293,11 @@ export function ClusterMirrorDetail({ name: nameProp }: { name?: string }) {
             {refreshing ? <CircularProgress size={18} /> : 'Refresh now'}
           </Button>
         </Box>
+        {status.reportLocation && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Report: <code>{status.reportLocation}</code>
+          </Typography>
+        )}
 
         {status.syncError && (
           <Alert severity="error" sx={{ mt: 2 }}>

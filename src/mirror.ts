@@ -5,8 +5,18 @@ import { MirrorReport } from './types';
 // The name users give their main ClusterMirror. The plugin treats it as "the" mirror when there are several.
 export const DEFAULT_MIRROR_NAME = 'default';
 
-// A mirror's report on the reports service (the operator writes <name>.mirror; analyses use .mirops).
+// Every report the operator writes is <name>.mirops — a mirror's and an analysis's alike.
+export function mirrorReportName(name: string): string {
+  return `${name}.mirops`;
+}
+
+// A mirror's report on the reports service: ?kind= tells it apart from an analysis with the same name.
 export function mirrorReportFile(name: string): string {
+  return `${mirrorReportName(name)}?kind=ClusterMirror`;
+}
+
+// Operator 0.2.0 serves a mirror's report only as <name>.mirror; useReport falls back to it.
+export function mirrorReportAlias(name: string): string {
   return `${name}.mirror`;
 }
 
@@ -27,6 +37,7 @@ export function useUpgradeState() {
   const { mirror } = useDefaultMirror();
   const name = mirror?.metadata.name;
   const { report } = useReport<MirrorReport>(name ? mirrorReportFile(name) : undefined, {
+    fallbackFile: name ? mirrorReportAlias(name) : undefined,
     enabled: !!name,
     refreshKey: mirror?.status?.lastSync,
     resetOnRefresh: false,

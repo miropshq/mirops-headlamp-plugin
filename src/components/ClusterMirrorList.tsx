@@ -7,7 +7,7 @@ import React from 'react';
 import { timeAgo } from '../format';
 import { useDefaultMirror } from '../mirror';
 import { ClusterMirror } from '../resources';
-import { ClusterMirrorDetail } from './ClusterMirrorDetail';
+import { NewMirrorButton } from './ClusterMirrorCreate';
 
 const EXAMPLE_MIRROR = `apiVersion: mirops.mirops.io/v1
 kind: ClusterMirror
@@ -17,8 +17,8 @@ spec:
   refresh:
     interval: 5m`;
 
-// ClusterMirrorList is the Mirops landing page. Almost every install has exactly one mirror (usually
-// named "default"), so that case opens it directly instead of a one-row table.
+// ClusterMirrorList is the Mirops landing page: every mirror in the cluster, like Upgrade Analyses.
+// Most installs have one (usually named "default"); a name opens its detail.
 export function ClusterMirrorList() {
   const { mirrors, error } = useDefaultMirror();
 
@@ -41,7 +41,13 @@ export function ClusterMirrorList() {
           <Typography variant="body2">
             There&apos;s no ClusterMirror in this cluster. mirops doesn&apos;t create one — like an
             UpgradeAnalysis, you create it after installing. Name it &quot;default&quot; so this
-            page opens it first:
+            page opens it first.
+          </Typography>
+          <Box>
+            <NewMirrorButton variant="contained" />
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            Or apply it with kubectl:
           </Typography>
           <Box
             component="pre"
@@ -62,12 +68,11 @@ export function ClusterMirrorList() {
     );
   }
 
-  if (mirrors.length === 1) return <ClusterMirrorDetail name={mirrors[0].metadata.name} />;
-
   return (
     <ResourceListView
       title="Cluster Mirrors"
       resourceClass={ClusterMirror}
+      headerProps={{ actions: [<NewMirrorButton key="create" variant="contained" />] }}
       columns={[
         {
           id: 'name',
@@ -80,6 +85,12 @@ export function ClusterMirrorList() {
           ),
         },
         {
+          id: 'status',
+          label: 'Status',
+          getValue: (item: ClusterMirror) =>
+            item.status?.syncError ? 'Error' : item.status?.lastSync ? 'Live' : 'Building',
+        },
+        {
           id: 'components',
           label: 'Components',
           getValue: (item: ClusterMirror) => item.status?.components ?? '-',
@@ -88,6 +99,11 @@ export function ClusterMirrorList() {
           id: 'atRisk',
           label: 'At risk',
           getValue: (item: ClusterMirror) => item.status?.atRisk ?? '-',
+        },
+        {
+          id: 'report',
+          label: 'Report',
+          getValue: (item: ClusterMirror) => item.status?.reportLocation ?? '-',
         },
         {
           id: 'lastSync',

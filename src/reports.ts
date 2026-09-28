@@ -53,6 +53,8 @@ export function useReportsNamespace(): string {
 interface UseReportOptions {
   // Don't fetch until the resource that owns the report has loaded.
   enabled: boolean;
+  // Asked for when file isn't found — the same report under the name an older operator serves.
+  fallbackFile?: string;
   // Changes whenever a new report is expected (an analysis finished, the mirror rebuilt) and re-arms
   // the poll. Depending on the whole resource instead would re-run on every watch tick.
   refreshKey?: unknown;
@@ -63,7 +65,7 @@ interface UseReportOptions {
   resetOnRefresh?: boolean;
 }
 
-// useReport fetches a report (<name>.mirops, <name>.mirror) from the operator's reports service. That
+// useReport fetches a report (<name>.mirops) from the operator's reports service. That
 // service isn't reachable from the browser directly, so the request goes through the Kubernetes API
 // server's service proxy via Headlamp's backend.
 //
@@ -76,7 +78,7 @@ export function useReport<T>(file: string | undefined, opts: UseReportOptions) {
   const [report, setReport] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { enabled, refreshKey, failed = false, resetOnRefresh = true } = opts;
+  const { enabled, refreshKey, failed = false, resetOnRefresh = true, fallbackFile } = opts;
 
   useEffect(() => {
     if (!enabled || !file) return;
@@ -84,9 +86,9 @@ export function useReport<T>(file: string | undefined, opts: UseReportOptions) {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     let attempts = 0;
-    const path =
-      `/api/v1/namespaces/${namespace}/services/${REPORTS_SERVICE_NAME}:${REPORTS_SERVICE_PORT}` +
-      `/proxy/reports/${file}`;
+    const base = `/api/v1/namespaces/${namespace}/services/${REPORTS_SERVICE_NAME}:${REPORTS_SERVICE_PORT}/proxy/reports/`;
+    // With a fallback, alternate between the two names until one answers.
+    const paths = [file, fallbackFile].filter(Boolean).map(f => base + f);
 
     setLoading(true);
     setError(null);
@@ -97,7 +99,7 @@ export function useReport<T>(file: string | undefined, opts: UseReportOptions) {
         if (!cancelled) setLoading(false);
         return;
       }
-      ApiProxy.request(path)
+      ApiProxy.request(paths[attempts % paths.length])
         .then((data: T) => {
           if (cancelled) return;
           setReport(data);
@@ -120,7 +122,7 @@ export function useReport<T>(file: string | undefined, opts: UseReportOptions) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [file, namespace, enabled, refreshKey, failed, resetOnRefresh]);
+  }, [file, fallbackFile, namespace, enabled, refreshKey, failed, resetOnRefresh]);
 
   return { report, error, loading };
 }

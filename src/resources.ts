@@ -97,6 +97,11 @@ export interface ClusterMirrorSpec {
     // Go duration as serialized by the API, e.g. "5m0s".
     interval?: string;
   };
+  // Where the operator writes the mirror report — same shape as an UpgradeAnalysis source.
+  source?: {
+    type: 'file' | 's3' | 'blob' | 'pvc';
+    [key: string]: string | undefined;
+  };
 }
 
 export interface ClusterMirrorStatus {
@@ -107,6 +112,10 @@ export interface ClusterMirrorStatus {
   byNamespace?: { namespace: string; maxRisk: number; atRisk: number }[];
   // Set when the last rebuild (or writing its report) failed.
   syncError?: string;
+  // Report write outcome, like an UpgradeAnalysis's.
+  reportLocation?: string;
+  reportState?: 'written' | 'failed';
+  reportError?: string;
   observedGeneration?: number;
 }
 
