@@ -27,8 +27,11 @@ The plugin adds a **Mirops** sidebar section with two pages:
 - **At-risk components** — every component with risk 50 or higher, what depends on it, and where its
   risk comes from — plus the full **dependency graph** on demand.
 - **Problems right now**, **add-ons detected**, and the **workload inventory**.
-- **Several mirrors** — one mirror opens directly; with several, a list (the one named `default`
-  opens first). With none, the page shows the YAML to create one.
+- **List of mirrors** — the page opens on every ClusterMirror: status (Live, Building, Error),
+  components, at-risk count, where its report is written, and the last rebuild. A name opens it.
+- **New mirror** — a form to create a ClusterMirror: name, refresh interval, scope, excluded
+  namespaces, and report destination (file, S3, Azure Blob, PVC). It shows the report file the name
+  produces (`<name>.mirops`). With no mirror yet, the page offers it next to the YAML for `kubectl`.
 
 ### Upgrade Analyses
 
@@ -69,10 +72,10 @@ namespace). The operator creates none of them for you except RemediationPlans.
 
 ### Data sources
 
-- **The mirror report** (`<name>.mirror`) — the current state: `summary`, `atRisk`, `risk`, `addons`,
+- **The mirror report** (`<name>.mirops`, `kind: ClusterMirror`) — the current state: `summary`, `atRisk`, `risk`, `addons`,
   `workloads`, `issues`, `graph`, and `upgrade` (whether upgrade analysis is on). The Cluster Mirror
   page reads it, and Upgrade Analyses reads its `upgrade.enabled` to show the turned-off notice.
-- **The upgrade report** (`<name>.mirops`) — the `decision`, scores, add-on compatibility, removed
+- **The upgrade report** (`<name>.mirops`, `kind: UpgradeAnalysis`) — the `decision`, scores, add-on compatibility, removed
   APIs and drain blockers of one analysis.
 - **CR status** — the mirror's `lastSync`, `syncError` and counters; the analysis's status-only
   fields: `aiError`, `aiScore`, `aiModel`, `addonsChecked`, `incompatibleAddons`, `lastAnalysisTime`,
@@ -148,7 +151,7 @@ initContainers:
 ```
 
 The `initContainer` writes that value to a `config.json` next to the plugin, which the plugin reads
-at runtime to proxy the reports (`<name>.mirror`, `<name>.mirops`) from the right place. **If unset,
+at runtime to proxy the reports (`<name>.mirops`) from the right place. **If unset,
 it defaults to `mirops`.**
 
 ---

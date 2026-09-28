@@ -1,5 +1,6 @@
 import { registerRoute, registerSidebarEntry } from '@kinvolk/headlamp-plugin/lib';
 import React from 'react';
+import { ClusterMirrorCreate } from './components/ClusterMirrorCreate';
 import { ClusterMirrorDetail } from './components/ClusterMirrorDetail';
 import { ClusterMirrorList } from './components/ClusterMirrorList';
 import { RemediationPlanDetail } from './components/RemediationPlanDetail';
@@ -38,6 +39,14 @@ registerRoute({
   name: 'clusterMirrorList',
   exact: true,
   component: () => <ClusterMirrorList />,
+});
+
+registerRoute({
+  path: '/mirops/mirror/create',
+  sidebar: 'clusterMirror',
+  name: 'clusterMirrorCreate',
+  exact: true,
+  component: () => <ClusterMirrorCreate />,
 });
 
 registerRoute({
