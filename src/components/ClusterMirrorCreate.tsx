@@ -22,7 +22,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import React, { useState } from 'react';
 import { useHistory } from 'react-router-dom';
-import { DEFAULT_MIRROR_NAME, mirrorReportName } from '../mirror';
+import { mirrorReportName } from '../mirror';
 import { ClusterMirror } from '../resources';
 
 interface FormState {
@@ -136,19 +136,15 @@ export function ClusterMirrorCreate() {
   const history = useHistory();
   const [mirrors] = ClusterMirror.useList();
   const taken = mirrors?.map(m => m.metadata.name) ?? [];
-  const hasDefault = taken.includes(DEFAULT_MIRROR_NAME);
 
   const [form, setForm] = useState<FormState>(DEFAULT);
-  // Suggest "default" until the user types a name, as long as no mirror has it yet.
-  const [nameTouched, setNameTouched] = useState(false);
   const [newNs, setNewNs] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const values: FormState =
-    !nameTouched && mirrors && !hasDefault ? { ...form, name: DEFAULT_MIRROR_NAME } : form;
-  const invalid = validate(values, taken);
-  const reportFile = mirrorReportName(values.name || '<name>');
+  const invalid = validate(form, taken);
+  // The report file this name produces; an example until a name is typed.
+  const reportFile = mirrorReportName(form.name || 'cluster-default');
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -175,8 +171,8 @@ export function ClusterMirrorCreate() {
     setSubmitting(true);
     setError(null);
     try {
-      await ClusterMirror.apiEndpoint.post(buildCR(values));
-      history.push(Router.createRouteURL('clusterMirrorDetail', { name: values.name }));
+      await ClusterMirror.apiEndpoint.post(buildCR(form));
+      history.push(Router.createRouteURL('clusterMirrorDetail', { name: form.name }));
     } catch (err: any) {
       setError(err?.message ?? String(err));
     } finally {
@@ -207,16 +203,10 @@ export function ClusterMirrorCreate() {
           label="Name"
           required
           fullWidth
-          value={values.name}
-          onChange={e => {
-            setNameTouched(true);
-            set('name', e.target.value);
-          }}
-          helperText={
-            hasDefault
-              ? 'Name of the CR in the cluster'
-              : `Name of the CR in the cluster. "${DEFAULT_MIRROR_NAME}" is the one this plugin opens first.`
-          }
+          placeholder="cluster-default"
+          value={form.name}
+          onChange={e => set('name', e.target.value)}
+          helperText={`Report: ${reportFile}`}
         />
 
         <TextField
@@ -422,7 +412,7 @@ export function ClusterMirrorCreate() {
         {error && <Alert severity="error">{error}</Alert>}
 
         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', alignItems: 'center' }}>
-          {invalid && values.name && (
+          {invalid && form.name && (
             <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
               {invalid}
             </Typography>
