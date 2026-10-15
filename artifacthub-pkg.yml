@@ -15,12 +15,9 @@ createdAt: "2026-09-28T04:02:28Z"
 # Logo shown in the Artifact Hub / Headlamp catalog card. Commit the image to the repo
 # (e.g. docs/logo.png) and reference its raw URL. Must be a public, direct image URL.
 logoURL: https://raw.githubusercontent.com/miropshq/mirops-headlamp-plugin/main/docs/logo.png
-description: |
-  See your cluster's live dependency graph and current risk inside Headlamp — the
-  always-on Cluster Mirror: namespace risk heatmap, at-risk components and what depends
-  on them, and the dependency graph. When upgrade analysis is on, check Kubernetes
-  upgrade readiness too: the SAFE/WARNING/CRITICAL verdict, the score breakdown, add-on
-  compatibility, and review and approve operator-proposed remediation plans.
+description: >
+  The Mirops Kubernetes Cluster Mirror in Headlamp: see what breaks before it does — in
+  your cluster today, and in your next Kubernetes upgrade.
 license: Apache-2.0
 homeURL: https://github.com/miropshq/mirops-headlamp-plugin
 links:
