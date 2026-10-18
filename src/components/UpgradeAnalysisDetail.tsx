@@ -1,4 +1,3 @@
-import { ApiProxy, Router } from '@kinvolk/headlamp-plugin/lib';
 import { Link, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Alert from '@mui/material/Alert';
 import AlertTitle from '@mui/material/AlertTitle';
@@ -19,36 +18,29 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
-import React, { useEffect, useState } from 'react';
-import { useHistory, useParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { componentLabel } from '../format';
+import { useDefaultMirror } from '../mirror';
+import { useReport } from '../reports';
 import { RemediationPlan, UpgradeAnalysis } from '../resources';
-import { riskSeverity } from '../riskColor';
-import { AddonStatus, Decision, NamespaceRisk, Report } from '../types';
+import { AddonImpact, AddonStatus, Decision, Report } from '../types';
 import { DependencyGraph } from './DependencyGraph';
-import { RiskBadge } from './RiskBadge';
-import { HealthBand,ScoreGauge } from './ScoreGauge';
-
-// Viewing a remote report can fail at the proxy with HTTP 502 carrying a JSON
-// body { error, location, detail }. Surface `detail` (the actionable cause)
-// when present; fall back to the raw error message otherwise.
-function extractReportError(e: any): string {
-  const raw = e?.message ?? String(e);
-  try {
-    const body = JSON.parse(raw);
-    if (body && typeof body === 'object' && body.detail) {
-      return body.location ? `${body.detail} (${body.location})` : body.detail;
-    }
-  } catch {
-    /* not JSON — use the raw message */
-  }
-  return raw;
-}
+import { IssuesSection } from './IssuesSection';
+import { NamespaceRiskHeatmap } from './NamespaceRiskHeatmap';
+import { ScoreBreakdown } from './ScoreBreakdown';
+import { HealthBand, ScoreGauge } from './ScoreGauge';
+import { WorkloadsData } from './WorkloadsData';
 
 function MetricCard({ label, value }: { label: string; value: string | number }) {
   return (
     <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-      <Typography variant="h6" fontWeight={700}>{value}</Typography>
-      <Typography variant="caption" color="text.secondary">{label}</Typography>
+      <Typography variant="h6" fontWeight={700}>
+        {value}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        {label}
+      </Typography>
     </Paper>
   );
 }
@@ -65,7 +57,7 @@ function AddonCompatibilityTable({ report }: { report: Report }) {
   return (
     <Box sx={{ mb: 3 }}>
       <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Add-on Compatibility
+        Add-on compatibility with {report.targetVersion}
       </Typography>
       <Table size="small">
         <TableHead>
@@ -91,8 +83,10 @@ function AddonCompatibilityTable({ report }: { report: Report }) {
                 />
               </TableCell>
               <TableCell>
-                {a.status === 'incompatible' && a.requiredVersion
-                  ? `upgrade to ${a.requiredVersion}`
+                {a.status === 'incompatible'
+                  ? a.requiredVersion
+                    ? `upgrade to ${a.requiredVersion}`
+                    : 'no version available'
                   : '—'}
               </TableCell>
               <TableCell sx={{ maxWidth: 420 }}>
@@ -100,216 +94,6 @@ function AddonCompatibilityTable({ report }: { report: Report }) {
               </TableCell>
             </TableRow>
           ))}
-        </TableBody>
-      </Table>
-    </Box>
-  );
-}
-
-// Synthetic bucket holding cluster-scoped components (Nodes) — not a real
-// Namespace, so it isn't navigable and is sorted last with distinct styling.
-const CLUSTER_SCOPED_BUCKET = 'cluster-scoped';
-
-// The operator serves report.json from an in-cluster Service named
-// 'mirops-reports'. UpgradeAnalysis is cluster-scoped so it no longer carries a
-// namespace to locate it, and the operator can be installed in any namespace.
-// The deployer sets that namespace in headlamp-values.yaml; the initContainer
-// writes it to a config.json next to the plugin, which we read at runtime. This
-// default is the fallback when no config.json is present.
-const REPORTS_SERVICE_NAME = 'mirops-reports';
-const REPORTS_SERVICE_NAMESPACE = 'mirops';
-
-// Read the operator's namespace from the plugin's runtime config.json (written
-// by the Helm initContainer from headlamp-values.yaml). Falls back to the
-// default until/unless the file resolves.
-function useReportsNamespace(): string {
-  const [namespace, setNamespace] = useState(REPORTS_SERVICE_NAMESPACE);
-  useEffect(() => {
-    fetch('/plugins/mirops/config.json')
-      .then(r => (r.ok ? r.json() : null))
-      .then(cfg => {
-        if (cfg?.reportsNamespace) setNamespace(cfg.reportsNamespace);
-      })
-      .catch(() => {
-        /* no config.json — keep the default */
-      });
-  }, []);
-  return namespace;
-}
-
-function NamespaceRiskHeatmap({ byNamespace }: { byNamespace: NamespaceRisk[] }) {
-  const history = useHistory();
-  if (byNamespace.length === 0) return null;
-  const sorted = [...byNamespace].sort((a, b) => {
-    // Keep the synthetic cluster-scoped tile last regardless of risk.
-    const aSynthetic = a.namespace === CLUSTER_SCOPED_BUCKET;
-    const bSynthetic = b.namespace === CLUSTER_SCOPED_BUCKET;
-    if (aSynthetic !== bSynthetic) return aSynthetic ? 1 : -1;
-    return b.risk - a.risk;
-  });
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        Namespace Risk
-      </Typography>
-      <Grid container spacing={2}>
-        {sorted.map(ns => {
-          const isClusterScoped = ns.namespace === CLUSTER_SCOPED_BUCKET;
-          const navigable = !isClusterScoped;
-          return (
-            <Grid item xs={6} sm={4} md={2} key={ns.namespace}>
-              <Paper
-                variant="outlined"
-                onClick={
-                  navigable
-                    ? () =>
-                        history.push(
-                          Router.createRouteURL('namespace', { name: ns.namespace })
-                        )
-                    : undefined
-                }
-                sx={{
-                  p: 2,
-                  textAlign: 'center',
-                  borderLeft: '4px solid',
-                  borderLeftColor: riskSeverity(ns.risk).color,
-                  borderStyle: isClusterScoped ? 'dashed' : 'solid',
-                  bgcolor: isClusterScoped ? 'action.hover' : undefined,
-                  cursor: navigable ? 'pointer' : 'default',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 0.5,
-                }}
-              >
-                <RiskBadge risk={ns.risk} />
-                <Typography variant="body2" noWrap>
-                  {isClusterScoped ? 'cluster-scoped' : ns.namespace}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {ns.atRisk}/{ns.components} at risk
-                </Typography>
-              </Paper>
-            </Grid>
-          );
-        })}
-      </Grid>
-    </Box>
-  );
-}
-
-function WorkloadTable({
-  title,
-  rows,
-  columns,
-}: {
-  title: string;
-  rows: any[];
-  columns: { label: string; key: string }[];
-}) {
-  if (!rows || rows.length === 0) return null;
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>{title}</Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            {columns.map(c => <TableCell key={c.key}>{c.label}</TableCell>)}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((row, i) => (
-            <TableRow key={i}>
-              {columns.map(c => <TableCell key={c.key}>{String(row[c.key] ?? '-')}</TableCell>)}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Box>
-  );
-}
-
-interface WorkloadRow {
-  namespace: string;
-  name: string;
-  pods?: { name: string; reason?: string; restarts: number }[];
-}
-
-// Renders a workload table where the namespace, the workload and each problem
-// pod link to their Headlamp detail view, so the user can jump straight to the
-// resource instead of just reading a name.
-function WorkloadSection<T extends WorkloadRow>({
-  title,
-  routeName,
-  rows,
-  status,
-}: {
-  title: string;
-  routeName: 'Deployment' | 'StatefulSet' | 'DaemonSet' | 'Job';
-  rows: T[];
-  status: (row: T) => string;
-}) {
-  if (!rows || rows.length === 0) return null;
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>{title}</Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Namespace</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell>Problem pods</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((row, i) => {
-            const problemPods = (row.pods ?? []).filter(p => p.reason || p.restarts > 0);
-            return (
-              <TableRow key={i}>
-                <TableCell>
-                  <Link routeName="namespace" params={{ name: row.namespace }}>
-                    {row.namespace}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <Link routeName={routeName} params={{ namespace: row.namespace, name: row.name }}>
-                    {row.name}
-                  </Link>
-                </TableCell>
-                <TableCell>{status(row)}</TableCell>
-                <TableCell>
-                  {problemPods.length === 0 ? (
-                    '—'
-                  ) : (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                      {problemPods.map(p => (
-                        <Box
-                          key={p.name}
-                          sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}
-                        >
-                          <Link
-                            routeName="Pod"
-                            params={{ namespace: row.namespace, name: p.name }}
-                          >
-                            {p.name}
-                          </Link>
-                          {p.reason && (
-                            <Chip label={p.reason} size="small" color="warning" variant="outlined" />
-                          )}
-                          {p.restarts > 0 && (
-                            <Typography variant="caption" color="text.secondary">
-                              {p.restarts} restarts
-                            </Typography>
-                          )}
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
         </TableBody>
       </Table>
     </Box>
@@ -343,8 +127,10 @@ function VerdictBanner({
     decision === 'SAFE'
       ? 'Cluster is healthy and nothing blocks the upgrade — ready to go.'
       : decision === 'WARNING'
-        ? `Cluster health is ${score}${healthBand === 'SAFE' ? ' (good)' : ''}, but the cluster is unstable — not blocked, but stabilize it before upgrading.`
-        : `Cluster health (${score}) is a separate reading — a blocker prevents the upgrade until it's fixed (see below).`;
+      ? `Cluster health is ${score}${
+          healthBand === 'SAFE' ? ' (good)' : ''
+        }, but the cluster is unstable — not blocked, but stabilize it before upgrading.`
+      : `Cluster health (${score}) is a separate reading — a blocker prevents the upgrade until it's fixed (see below).`;
 
   return (
     <Alert severity={cfg.sev} sx={{ mb: 1.5 }}>
@@ -414,71 +200,155 @@ function Findings({ blockers, warnings }: { blockers: string[]; warnings: string
   );
 }
 
+// How many affected components UpgradeImpact names before "and N more".
+const IMPACT_SHOWN = 8;
+
+// UpgradeImpact is the upgrade's own blast radius: for each add-on the target version breaks, what
+// depends on it. Nothing renders when no add-on is incompatible (or the report predates the field).
+function UpgradeImpact({
+  impact,
+  targetVersion,
+}: {
+  impact: AddonImpact[];
+  targetVersion: string;
+}) {
+  if (impact.length === 0) return null;
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600}>
+        Upgrade impact
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        What depends on each add-on that Kubernetes {targetVersion} breaks.
+      </Typography>
+      {impact.map(i => {
+        const affected = i.affected ?? [];
+        return (
+          <Paper
+            key={i.addon}
+            variant="outlined"
+            sx={{ p: 2, mb: 1, display: 'flex', gap: 3, flexWrap: 'wrap' }}
+          >
+            <Box sx={{ minWidth: 200 }}>
+              <Typography variant="body1" fontWeight={600}>
+                {i.addon} {i.version}
+              </Typography>
+              {i.requiredVersion && (
+                <Typography variant="body2" color="text.secondary">
+                  Needs {i.requiredVersion} for Kubernetes {targetVersion}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+                {affected.length === 0
+                  ? 'Nothing depends on it'
+                  : `${affected.length} component${
+                      affected.length === 1 ? ' depends' : 's depend'
+                    } on it`}
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                {affected.slice(0, IMPACT_SHOWN).map(id => (
+                  <Chip
+                    key={id}
+                    label={componentLabel(id)}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontFamily: 'monospace' }}
+                  />
+                ))}
+                {affected.length > IMPACT_SHOWN && (
+                  <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
+                    and {affected.length - IMPACT_SHOWN} more
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          </Paper>
+        );
+      })}
+    </Box>
+  );
+}
+
+// UpgradeChecks are the metrics that only matter because of the upgrade: removed APIs and add-on
+// issues for the new version, and the headroom and stability the node drain depends on. Pod counts
+// are the cluster's current state and live in the mirror.
+function UpgradeChecks({ report }: { report: Report }) {
+  const m = report.metrics;
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const checks: [string, string | number][] = [
+    ['Deprecated APIs', m.compatibility.deprecatedApis],
+    ['Add-on Issues', m.compatibility.addonIssues],
+    ['CPU Pressure', pct(m.resources.cpuPressure)],
+    ['Memory Pressure', pct(m.resources.memoryPressure)],
+    ['Pod Drop Ratio', pct(m.stability.podDropRatio)],
+    ['Restart Delta', m.stability.restartDelta],
+  ];
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" fontWeight={600}>
+        Upgrade checks
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        What draining the nodes and the new version depend on.
+      </Typography>
+      <Grid container spacing={2}>
+        {checks.map(([label, value]) => (
+          <Grid item xs={6} sm={4} md={2} key={label}>
+            <MetricCard label={label} value={value} />
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
+  );
+}
+
+// LegacyClusterState keeps the cluster-state sections for reports from operators before 0.2.0, which
+// have no ClusterMirror to show them in.
+function LegacyClusterState({ report }: { report: Report }) {
+  const byNamespace = report.risk?.byNamespace ?? [];
+  const hasChains = (report.graph?.edges?.length ?? 0) > 0;
+  return (
+    <>
+      <Divider sx={{ mb: 3 }} />
+      <NamespaceRiskHeatmap byNamespace={byNamespace} />
+      {hasChains && report.graph && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+            Dependency Graph
+          </Typography>
+          <DependencyGraph graph={report.graph} />
+        </Box>
+      )}
+      <WorkloadsData workloads={report.workloads} />
+      <IssuesSection issues={report.issues} />
+    </>
+  );
+}
+
 export function UpgradeAnalysisDetail() {
   const { name } = useParams<{ name: string }>();
   const [item, error] = UpgradeAnalysis.useGet(name);
   const [plans] = RemediationPlan.useList();
-  const reportsNamespace = useReportsNamespace();
-  const [report, setReport] = useState<Report | null>(null);
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
+  const { mirror } = useDefaultMirror();
   const [showRawJson, setShowRawJson] = useState(false);
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!item || !name) return;
-
-    // Poll the report endpoint rather than trusting a single read: right after an analysis the
-    // export may still be in flight (the object isn't in storage yet → 404) and the CR watch can
-    // lag, so a one-shot fetch gets stuck on "Generating…". Retry quietly until the report is
-    // available; only surface an error after the operator reports a hard failure or retries run out.
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    let attempts = 0;
-    const maxAttempts = 20; // ~1 min at 3s
-
-    // The operator serves reports from an in-cluster service not reachable from the browser
-    // directly; route through the Kubernetes API server service proxy via Headlamp's backend.
-    const path =
-      `/api/v1/namespaces/${reportsNamespace}/services/${REPORTS_SERVICE_NAME}:8084` +
-      `/proxy/reports/${name}.json`;
-
-    setReportLoading(true);
-    setReportError(null);
-    setReport(null);
-
-    const attempt = () => {
-      // Hard failure recorded by the operator (banner above): stop retrying.
-      if ((item.status ?? {}).reportState === 'failed') {
-        if (!cancelled) setReportLoading(false);
-        return;
-      }
-      ApiProxy.request(path)
-        .then((data: Report) => {
-          if (cancelled) return;
-          setReport(data);
-          setReportLoading(false);
-        })
-        .catch(e => {
-          if (cancelled) return;
-          attempts += 1;
-          if (attempts >= maxAttempts) {
-            setReportError(extractReportError(e));
-            setReportLoading(false);
-          } else {
-            timer = setTimeout(attempt, 3000); // report not written yet — keep waiting
-          }
-        });
-    };
-    attempt();
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [item, name, reportsNamespace]);
+  // Re-arm the report poll only when a *new* report is expected — a fresh analysis completes
+  // (lastAnalysisTime changes) or a write fails (reportState, which also stops the retries). Reports
+  // use the `.mirops` extension (JSON content) for every destination, local included.
+  const {
+    report,
+    error: reportError,
+    loading: reportLoading,
+  } = useReport<Report>(name ? `${name}.mirops` : undefined, {
+    enabled: !!item,
+    refreshKey: item?.status?.lastAnalysisTime,
+    failed: item?.status?.reportState === 'failed',
+  });
 
   if (error) return <Alert severity="error">{String(error)}</Alert>;
   if (!item) return <CircularProgress />;
@@ -521,7 +391,9 @@ export function UpgradeAnalysisDetail() {
     return (
       <SectionBox title={`Upgrade Analysis: ${name}`}>
         <Alert severity="error" sx={{ mb: 2 }}>
-          <Typography variant="subtitle2" fontWeight={600}>Configuration error</Typography>
+          <Typography variant="subtitle2" fontWeight={600}>
+            Configuration error
+          </Typography>
           <Typography variant="body2">
             {status.reason ??
               'This analysis could not run. Check that spec.targetVersion is higher than the current cluster version.'}
@@ -534,6 +406,24 @@ export function UpgradeAnalysisDetail() {
     );
   }
 
+  // The operator writes status (verdict + score + AI) once the analysis finishes; until then there is
+  // no verdict yet. Render one "analyzing" spinner instead of a placeholder WARNING verdict and a
+  // premature "AI unavailable" banner that would flash before the real result lands. On a re-analysis
+  // the previous status is still present, so this only shows on the very first run.
+  if (!status.decision) {
+    return (
+      <SectionBox title={`Upgrade Analysis: ${name}`}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 4 }}>
+          <CircularProgress size={22} />
+          <Typography variant="body1">
+            Analyzing cluster — evaluating readiness
+            {item.spec?.ai?.enabled ? ' and running AI scoring' : ''}…
+          </Typography>
+        </Box>
+      </SectionBox>
+    );
+  }
+
   // The operator links a RemediationPlan back to its analysis via
   // spec.upgradeAnalysisRef (no annotation on the analysis itself).
   const remediationPlan = plans?.find(p => p.spec?.upgradeAnalysisRef === name);
@@ -542,8 +432,7 @@ export function UpgradeAnalysisDetail() {
   // AI was requested but failed: the operator sets status.aiError (categorized).
   // Older operators only logged it, so also fall back to a heuristic.
   const aiRequested = item.spec?.ai?.enabled === true;
-  const aiFailed =
-    !!status.aiError || (aiRequested && !status.aiReasoning && !status.aiScore);
+  const aiFailed = !!status.aiError || (aiRequested && !status.aiReasoning && !status.aiScore);
   const remediationRequested = aiRequested && item.spec?.ai?.remediation?.enabled === true;
 
   return (
@@ -553,44 +442,63 @@ export function UpgradeAnalysisDetail() {
         <Box sx={{ display: 'flex', gap: 4, alignItems: 'flex-start', flexWrap: 'wrap', mb: 2 }}>
           <ScoreGauge score={score} band={healthBand} />
           <Box sx={{ flex: 1 }}>
-            <VerdictBanner decision={decision} score={score} healthBand={healthBand} reason={status.reason} />
+            <VerdictBanner
+              decision={decision}
+              score={score}
+              healthBand={healthBand}
+              reason={status.reason}
+            />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexWrap: 'wrap' }}>
               {item.spec?.targetVersion && (
-                <Chip label={`Target: ${item.spec.targetVersion}`} size="small" variant="outlined" />
+                <Chip
+                  label={`Target: ${item.spec.targetVersion}`}
+                  size="small"
+                  variant="outlined"
+                />
               )}
               <Chip
                 label={`Profile: ${item.spec?.scoringProfile ?? 'production'}`}
                 size="small"
                 variant="outlined"
-                color={(item.spec?.scoringProfile ?? 'production') === 'production' ? 'primary' : 'default'}
+                color={
+                  (item.spec?.scoringProfile ?? 'production') === 'production'
+                    ? 'primary'
+                    : 'default'
+                }
               />
               {status.addonsChecked !== undefined && status.addonsChecked > 0 && (
                 <Chip
-                  label={`Add-ons: ${status.addonsChecked} checked · ${status.incompatibleAddons ?? 0} incompatible`}
+                  label={`Add-ons: ${status.addonsChecked} checked · ${
+                    status.incompatibleAddons ?? 0
+                  } incompatible`}
                   size="small"
                   variant="outlined"
                   color={(status.incompatibleAddons ?? 0) > 0 ? 'error' : 'success'}
                 />
               )}
             </Box>
-            {remediationRef && (
-              <Box sx={{ mt: 1 }}>
-                <Link
-                  routeName="remediationPlanDetail"
-                  params={{ name: remediationRef }}
-                >
-                  View Remediation Plan →
-                </Link>
-              </Box>
-            )}
-            <Box sx={{ mt: 2 }}>
+            {/* Score breakdown — the four readiness dimensions as status bars, right in the header
+                next to the gauge. Renders once the report is loaded (it carries the sub-scores). */}
+            {report && <ScoreBreakdown base={report.scores.base} ai={report.scores.ai} />}
+            {/* Button first so it holds a stable position; the remediation link sits beside it and
+                appears (once the plan loads) without shifting the button. */}
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               <Button variant="contained" size="small" disabled={refreshing} onClick={reanalyze}>
                 {refreshing ? <CircularProgress size={18} /> : 'Re-analyze'}
               </Button>
-              {refreshError && (
-                <Alert severity="error" sx={{ mt: 1 }}>{refreshError}</Alert>
+              {remediationRef && (
+                <Box sx={{ ml: 'auto' }}>
+                  <Link routeName="remediationPlanDetail" params={{ name: remediationRef }}>
+                    View Remediation Plan →
+                  </Link>
+                </Box>
               )}
             </Box>
+            {refreshError && (
+              <Alert severity="error" sx={{ mt: 1 }}>
+                {refreshError}
+              </Alert>
+            )}
           </Box>
         </Box>
 
@@ -612,42 +520,6 @@ export function UpgradeAnalysisDetail() {
                 sx={{ mt: 1, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.8rem' }}
               >
                 {status.reportError}
-              </Typography>
-            )}
-          </Alert>
-        )}
-
-        {/* AI Reasoning */}
-        {status.aiReasoning && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" fontWeight={600}>AI Reasoning ({status.aiModel})</Typography>
-            <Typography variant="body2">{status.aiReasoning}</Typography>
-          </Alert>
-        )}
-
-        {/* AI was enabled but produced no result → it failed in the operator */}
-        {aiFailed && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" fontWeight={600}>
-              AI unavailable — showing base analysis only
-            </Typography>
-            <Typography variant="body2">
-              AI scoring was enabled but the AI call failed, so the score and decision
-              above are the base analysis only
-              {remediationRequested && ', and no RemediationPlan was generated'}.
-            </Typography>
-            {status.aiError ? (
-              <Typography
-                variant="body2"
-                component="pre"
-                sx={{ mt: 1, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.8rem' }}
-              >
-                {status.aiError}
-              </Typography>
-            ) : (
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                Check the operator logs for the exact cause (common: invalid/empty API
-                key or insufficient API credits).
               </Typography>
             )}
           </Alert>
@@ -678,189 +550,121 @@ export function UpgradeAnalysisDetail() {
         )}
       </SectionBox>
 
-      {/* Report section */}
+      {/* Report section — while the report is still being fetched show only the spinner; once it
+          resolves, render the AI reasoning and the report body together, so nothing appears above a
+          still-loading report. */}
       <SectionBox>
-        {reportPending && (
+        {reportPending ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={20} />
             <Typography variant="body2" color="text.secondary">
-              Generating report…
+              {/* "Loading" once the operator has written the report (reportState = written) — we're
+                  just fetching the file; "Generating" only while the analysis is still producing it. */}
+              {status.reportState === 'written' ? 'Loading report…' : 'Generating report…'}
             </Typography>
           </Box>
-        )}
-        {reportError && (
-          <Alert severity="warning">
-            Could not load report: {reportError}
-          </Alert>
-        )}
-        {report && (
+        ) : (
           <>
-            {/* One consolidated Findings block: blockers (must fix) and warnings (don't block),
-                for every verdict — so the report always says what's wrong and whether it stops the
-                upgrade. The data sections below (metrics, breakdown, add-ons, risk, graph) follow. */}
-            <Findings
-              blockers={report.decision.blockers ?? []}
-              warnings={buildWarnings(report, score, safeThreshold)}
-            />
-
-            {/* Metrics grid */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={6} sm={3}>
-                <MetricCard label="Total Pods" value={report.metrics.pods.total} />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <MetricCard label="Not Ready" value={report.metrics.pods.notReady} />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <MetricCard label="Restarts" value={report.metrics.pods.restarts} />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <MetricCard label="Deprecated APIs" value={report.metrics.compatibility.deprecatedApis} />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <MetricCard
-                  label="CPU Pressure"
-                  value={`${(report.metrics.resources.cpuPressure * 100).toFixed(1)}%`}
-                />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <MetricCard
-                  label="Memory Pressure"
-                  value={`${(report.metrics.resources.memoryPressure * 100).toFixed(1)}%`}
-                />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <MetricCard
-                  label="Pod Drop Ratio"
-                  value={`${(report.metrics.stability.podDropRatio * 100).toFixed(1)}%`}
-                />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <MetricCard label="Restart Delta" value={report.metrics.stability.restartDelta} />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <MetricCard label="Add-on Issues" value={report.metrics.compatibility.addonIssues} />
-              </Grid>
-            </Grid>
-
-            {/* Score breakdown */}
-            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>Score Breakdown</Typography>
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={6} sm={2}>
-                <MetricCard label="Total" value={report.scores.total} />
-              </Grid>
-              <Grid item xs={6} sm={2}>
-                <MetricCard label="Health" value={report.scores.base.health} />
-              </Grid>
-              <Grid item xs={6} sm={2}>
-                <MetricCard label="Capacity" value={report.scores.base.capacity} />
-              </Grid>
-              <Grid item xs={6} sm={2}>
-                <MetricCard label="Stability" value={report.scores.base.stability} />
-              </Grid>
-              <Grid item xs={6} sm={2}>
-                <MetricCard label="Compatibility" value={report.scores.base.compatibility} />
-              </Grid>
-              {report.scores.ai && (
-                <Grid item xs={6} sm={2}>
-                  <MetricCard label={`AI (${report.scores.ai.model ?? 'model'})`} value={report.scores.ai.score} />
-                </Grid>
-              )}
-            </Grid>
-
-            <Divider sx={{ mb: 3 }} />
-
-            {/* Logical mirror: add-on compatibility, namespace risk, dependency graph */}
-            <AddonCompatibilityTable report={report} />
-            {report.risk?.byNamespace && (
-              <NamespaceRiskHeatmap byNamespace={report.risk.byNamespace} />
-            )}
-            {report.graph && <DependencyGraph graph={report.graph} />}
-
-            {/* Workloads */}
-            {report.workloads.nodes.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>Nodes</Typography>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {report.workloads.nodes.map(n => (
-                      <TableRow key={n.name}>
-                        <TableCell>
-                          <Link routeName="node" params={{ name: n.name }}>{n.name}</Link>
-                        </TableCell>
-                        <TableCell>{n.status}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Box>
-            )}
-            <WorkloadSection
-              title="Deployments"
-              routeName="Deployment"
-              rows={report.workloads.deployments}
-              status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
-            />
-            <WorkloadSection
-              title="StatefulSets"
-              routeName="StatefulSet"
-              rows={report.workloads.statefulsets}
-              status={d => `${d.readyReplicas}/${d.desiredReplicas} ready`}
-            />
-            <WorkloadSection
-              title="DaemonSets"
-              routeName="DaemonSet"
-              rows={report.workloads.daemonsets}
-              status={d => `${d.numberUnavailable} unavailable`}
-            />
-            <WorkloadSection
-              title="Jobs"
-              routeName="Job"
-              rows={report.workloads.jobs}
-              status={j => `${j.active} active`}
-            />
-            {report.workloads.deprecatedApis && report.workloads.deprecatedApis.length > 0 && (
-              <WorkloadTable
-                title="Deprecated APIs"
-                rows={report.workloads.deprecatedApis}
-                columns={[
-                  { label: 'Group', key: 'group' },
-                  { label: 'Version', key: 'version' },
-                  { label: 'Resource', key: 'resource' },
-                  { label: 'Removed In', key: 'removedIn' },
-                ]}
-              />
-            )}
-
-            {/* Issues */}
-            {report.issues && report.issues.length > 0 && (
-              <Box>
-                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>Issues</Typography>
-                {report.issues.map((issue, i) => (
-                  <Alert key={i} severity="warning" sx={{ mb: 1 }}>{issue}</Alert>
-                ))}
-              </Box>
-            )}
-
-            {/* AI Reasoning from report */}
-            {report.aiReasoning && !status.aiReasoning && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" fontWeight={600}>AI Reasoning</Typography>
-                <Typography variant="body2">{report.aiReasoning}</Typography>
+            {/* AI Reasoning — with the report, once "Generating report…" finishes */}
+            {status.aiReasoning && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  AI Reasoning ({status.aiModel})
+                </Typography>
+                <Typography variant="body2">{status.aiReasoning}</Typography>
               </Alert>
             )}
+            {/* AI was enabled but produced no result → it failed in the operator */}
+            {aiFailed && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  AI unavailable — showing base analysis only
+                </Typography>
+                <Typography variant="body2">
+                  AI scoring was enabled but the AI call failed, so the score and decision above are
+                  the base analysis only
+                  {remediationRequested && ', and no RemediationPlan was generated'}.
+                </Typography>
+                {status.aiError ? (
+                  <Typography
+                    variant="body2"
+                    component="pre"
+                    sx={{
+                      mt: 1,
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'monospace',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    {status.aiError}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Check the operator logs for the exact cause (common: invalid/empty API key or
+                    insufficient API credits).
+                  </Typography>
+                )}
+              </Alert>
+            )}
+            {reportError && <Alert severity="warning">Could not load report: {reportError}</Alert>}
+            {report && (
+              <>
+                {/* The cluster's current state (workloads, problems, namespace risk, the graph) lives
+                in the mirror; this report shows only what the upgrade adds. */}
+                {report.kind && mirror && (
+                  <Alert
+                    severity="info"
+                    sx={{ mb: 3 }}
+                    action={
+                      <Link routeName="clusterMirrorDetail" params={{ name: mirror.metadata.name }}>
+                        Open Cluster Mirror →
+                      </Link>
+                    }
+                  >
+                    The cluster&apos;s state — workloads, problems, namespace risk and the full
+                    dependency graph — is in Cluster Mirror.
+                  </Alert>
+                )}
 
-            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button variant="outlined" size="small" onClick={() => setShowRawJson(true)}>
-                Raw JSON
-              </Button>
-            </Box>
+                {/* One consolidated Findings block: blockers (must fix) and warnings (don't block),
+                for every verdict — so the report always says what's wrong and whether it stops the
+                upgrade. A current-state problem that blocks the upgrade (a Lost PVC) is listed here
+                too, since it explains the verdict; its detail is in the mirror. */}
+                <Findings
+                  blockers={report.decision.blockers ?? []}
+                  warnings={buildWarnings(report, score, safeThreshold)}
+                />
+
+                <UpgradeImpact
+                  impact={report.upgradeImpact ?? []}
+                  targetVersion={report.targetVersion}
+                />
+
+                <AddonCompatibilityTable report={report} />
+
+                <UpgradeChecks report={report} />
+
+                {/* Operators before 0.2.0 have no mirror, so their reports keep the cluster-state
+                sections here. */}
+                {!report.kind && <LegacyClusterState report={report} />}
+
+                {/* AI Reasoning from report */}
+                {report.aiReasoning && !status.aiReasoning && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2" fontWeight={600}>
+                      AI Reasoning
+                    </Typography>
+                    <Typography variant="body2">{report.aiReasoning}</Typography>
+                  </Alert>
+                )}
+
+                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button variant="outlined" size="small" onClick={() => setShowRawJson(true)}>
+                    Raw JSON
+                  </Button>
+                </Box>
+              </>
+            )}
           </>
         )}
       </SectionBox>
@@ -870,7 +674,13 @@ export function UpgradeAnalysisDetail() {
         <DialogContent dividers>
           <Box
             component="pre"
-            sx={{ m: 0, fontSize: '0.75rem', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+            sx={{
+              m: 0,
+              fontSize: '0.75rem',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+            }}
           >
             {JSON.stringify(report, null, 2)}
           </Box>
@@ -886,7 +696,9 @@ export function UpgradeAnalysisDetail() {
           >
             {copied ? 'Copied!' : 'Copy'}
           </Button>
-          <Button size="small" onClick={() => setShowRawJson(false)}>Close</Button>
+          <Button size="small" onClick={() => setShowRawJson(false)}>
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
     </>

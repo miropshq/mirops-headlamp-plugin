@@ -17,12 +17,13 @@ import { RemediationPlan } from '../resources';
 import { ActionResult, RemediationAction, RemediationPhase } from '../types';
 import { RiskChip } from './RiskChip';
 
-const PHASE_COLOR: Record<RemediationPhase, 'default' | 'warning' | 'info' | 'success' | 'error'> = {
-  'pending-approval': 'warning',
-  running: 'info',
-  completed: 'success',
-  failed: 'error',
-};
+const PHASE_COLOR: Record<RemediationPhase, 'default' | 'warning' | 'info' | 'success' | 'error'> =
+  {
+    'pending-approval': 'warning',
+    running: 'info',
+    completed: 'success',
+    failed: 'error',
+  };
 
 export function RemediationPlanDetail() {
   const { name } = useParams<{ name: string }>();
@@ -38,7 +39,7 @@ export function RemediationPlanDetail() {
   const phase: RemediationPhase = item.status?.phase ?? 'pending-approval';
   const results: ActionResult[] = item.status?.results ?? [];
   const approved: boolean = item.spec?.approved ?? false;
-  const isExecutable = !approved && (phase === 'pending-approval');
+  const isExecutable = !approved && phase === 'pending-approval';
 
   function toggleSkip(id: string) {
     setSkipped(prev => {
@@ -78,22 +79,20 @@ export function RemediationPlanDetail() {
     <SectionBox title={`Remediation Plan: ${name}`}>
       {/* Header status */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-        <Chip
-          label={phase}
-          color={PHASE_COLOR[phase]}
-          size="small"
-        />
+        <Chip label={phase} color={PHASE_COLOR[phase]} size="small" />
         {item.spec?.upgradeAnalysisRef && (
           <Typography variant="body2" color="text.secondary">
             Analysis: <strong>{item.spec.upgradeAnalysisRef}</strong>
           </Typography>
         )}
-        {approved && (
-          <Chip label="Approved" color="success" size="small" variant="outlined" />
-        )}
+        {approved && <Chip label="Approved" color="success" size="small" variant="outlined" />}
       </Box>
 
-      {patchError && <Alert severity="error" sx={{ mb: 2 }}>{patchError}</Alert>}
+      {patchError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {patchError}
+        </Alert>
+      )}
 
       {/* Actions table */}
       <Table size="small">
@@ -113,10 +112,7 @@ export function RemediationPlanDetail() {
             const result = resultById[action.id];
             const isSkipped = skipped.has(action.id) || action.skip;
             return (
-              <TableRow
-                key={action.id}
-                sx={{ opacity: isSkipped && isExecutable ? 0.4 : 1 }}
-              >
+              <TableRow key={action.id} sx={{ opacity: isSkipped && isExecutable ? 0.4 : 1 }}>
                 {isExecutable && (
                   <TableCell padding="checkbox">
                     <Checkbox
@@ -127,13 +123,18 @@ export function RemediationPlanDetail() {
                   </TableCell>
                 )}
                 <TableCell>
-                  <Typography variant="caption" fontFamily="monospace">{action.id}</Typography>
+                  <Typography variant="caption" fontFamily="monospace">
+                    {action.id}
+                  </Typography>
                 </TableCell>
                 <TableCell>{action.type}</TableCell>
                 <TableCell>
-                  {action.namespace ? `${action.namespace}/` : ''}{action.name}
+                  {action.namespace ? `${action.namespace}/` : ''}
+                  {action.name}
                 </TableCell>
-                <TableCell><RiskChip risk={action.risk} /></TableCell>
+                <TableCell>
+                  <RiskChip risk={action.risk} />
+                </TableCell>
                 <TableCell sx={{ maxWidth: 300 }}>
                   <Typography variant="body2">{action.reason}</Typography>
                 </TableCell>
@@ -151,7 +152,9 @@ export function RemediationPlanDetail() {
                         }
                         size="small"
                       />
-                    ) : '-'}
+                    ) : (
+                      '-'
+                    )}
                     {result?.error && (
                       <Typography variant="caption" color="error" display="block">
                         {result.error}
@@ -182,7 +185,11 @@ export function RemediationPlanDetail() {
             disabled={patching || skipped.size === actions.length}
             onClick={handleExecuteSelected}
           >
-            {patching ? <CircularProgress size={18} /> : `Ejecutar seleccionadas (${actions.length - skipped.size})`}
+            {patching ? (
+              <CircularProgress size={18} />
+            ) : (
+              `Ejecutar seleccionadas (${actions.length - skipped.size})`
+            )}
           </Button>
         </Box>
       )}

@@ -4,11 +4,20 @@ import { Link, ResourceListView } from '@kinvolk/headlamp-plugin/lib/CommonCompo
 import Button from '@mui/material/Button';
 import React from 'react';
 import { useHistory } from 'react-router-dom';
+import { useUpgradeState } from '../mirror';
 import { UpgradeAnalysis } from '../resources';
 import { DecisionChip } from './DecisionChip';
+import { UpgradeDisabled } from './UpgradeDisabled';
 
 export function UpgradeAnalysisList() {
   const history = useHistory();
+  const upgrade = useUpgradeState();
+
+  // Only an explicit upgrade.enabled=false from the mirror report hides the list; while that's
+  // unknown (no mirror, older operator, report still loading) the list shows as usual.
+  if (upgrade.state === 'disabled') {
+    return <UpgradeDisabled mirrorName={upgrade.mirrorName} atRisk={upgrade.atRisk} />;
+  }
 
   return (
     <ResourceListView
@@ -33,10 +42,7 @@ export function UpgradeAnalysisList() {
           label: 'Name',
           getValue: (item: UpgradeAnalysis) => item.metadata.name,
           render: (item: UpgradeAnalysis) => (
-            <Link
-              routeName="upgradeAnalysisDetail"
-              params={{ name: item.metadata.name }}
-            >
+            <Link routeName="upgradeAnalysisDetail" params={{ name: item.metadata.name }}>
               {item.metadata.name}
             </Link>
           ),

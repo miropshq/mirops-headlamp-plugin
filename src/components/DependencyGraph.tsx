@@ -13,20 +13,24 @@ import {
   MarkerType,
   type Node,
   ReactFlow,
+  useEdgesState,
+  useNodesState,
 } from '@xyflow/react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { HIGH_RISK_THRESHOLD, riskSeverity } from '../riskColor';
 import { GraphNode, GraphNodeType, ReportGraph } from '../types';
 
-// Layered layout: one column per node type, following the dependency
-// direction (Ingress/Service → workload → config/storage → node/add-on).
+// Layered layout, read left→right as "what fails" → "what it depends on":
+// failing workloads/pods on the left, the storage/config they use next, the
+// node they run on, and add-ons pinned to the far right. Empty columns are
+// compacted away in buildNodes so a missing layer never leaves a gap.
 const TYPE_COLUMN: Record<GraphNodeType, number> = {
   network: 0,
   workload: 1,
   config: 2,
   storage: 2,
   infra: 3,
-  addon: 3,
+  addon: 4,
 };
 
 const NODE_WIDTH = 220;
@@ -50,9 +54,7 @@ function filterByRisk(graph: ReportGraph, showAll: boolean, minRisk: number): Vi
     return { nodes: graph.nodes, dimmedIds: new Set() };
   }
 
-  const focusIds = new Set(
-    graph.nodes.filter(n => n.risk > 0 && n.risk >= minRisk).map(n => n.id)
-  );
+  const focusIds = new Set(graph.nodes.filter(n => n.risk > 0 && n.risk >= minRisk).map(n => n.id));
 
   const neighborIds = new Set<string>();
   for (const e of graph.edges) {
@@ -68,33 +70,48 @@ function filterByRisk(graph: ReportGraph, showAll: boolean, minRisk: number): Vi
 
 function buildNodes(visible: VisibleGraph): Node[] {
   const byColumn = new Map<number, GraphNode[]>();
+  // Count names so a namespace is shown only when a name is ambiguous (appears on more than one
+  // visible node). Unique names render clean — just the name — with no namespace at all.
+  const nameCounts = new Map<string, number>();
   for (const n of visible.nodes) {
     const col = TYPE_COLUMN[n.type] ?? 4;
     const list = byColumn.get(col) ?? [];
     list.push(n);
     byColumn.set(col, list);
+    nameCounts.set(n.name, (nameCounts.get(n.name) ?? 0) + 1);
   }
+
+  // Compact the used columns to consecutive indices, so a missing layer (e.g. no network nodes)
+  // doesn't leave an empty leading column that pushes everything right and stretches the edges.
+  const denseIndex = new Map([...byColumn.keys()].sort((a, b) => a - b).map((col, i) => [col, i]));
 
   const rfNodes: Node[] = [];
   for (const [col, list] of byColumn) {
+    const x = (denseIndex.get(col) ?? 0) * COLUMN_GAP;
     list.sort(
-      (a, b) =>
-        (a.namespace ?? '').localeCompare(b.namespace ?? '') || a.name.localeCompare(b.name)
+      (a, b) => (a.namespace ?? '').localeCompare(b.namespace ?? '') || a.name.localeCompare(b.name)
     );
     list.forEach((n, row) => {
       const dimmed = visible.dimmedIds.has(n.id);
       const { level, color } = riskSeverity(n.risk);
+      // Only disambiguate with the namespace when this name isn't unique among visible nodes.
+      const showNamespace = !!n.namespace && (nameCounts.get(n.name) ?? 0) > 1;
       rfNodes.push({
         id: n.id,
-        position: { x: col * COLUMN_GAP, y: row * ROW_GAP },
+        position: { x, y: row * ROW_GAP },
         connectable: false,
         data: {
           label: (
-            <div title={`${n.kind} · ${level} risk${n.status ? ` · ${n.status}` : ''}`}>
+            <div title={`${n.kind} · risk ${n.risk} (${level})${n.status ? ` · ${n.status}` : ''}`}>
               <strong>{n.name}</strong>
+              {/* Namespace only when the name is ambiguous — two same-named workloads (e.g. app in
+                  test4 vs test5) need it to be told apart; unique names stay clean, like the design. */}
+              {showNamespace && (
+                <span style={{ fontSize: 10, opacity: 0.7 }}> · {n.namespace}</span>
+              )}
+              {/* Risk value is the point of the graph — show the number, then the severity word. */}
               <div style={{ fontSize: 10, opacity: 0.85 }}>
-                {n.kind}
-                {n.namespace ? ` · ${n.namespace}` : ''} · {level}
+                {n.kind} · <strong>{n.risk}</strong> {level}
               </div>
             </div>
           ),
@@ -149,15 +166,20 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
   const [showAll, setShowAll] = useState(false);
   const [minRisk, setMinRisk] = useState(0);
 
-  const visible = useMemo(
-    () => filterByRisk(graph, showAll, minRisk),
-    [graph, showAll, minRisk]
-  );
-  const nodes = useMemo(() => buildNodes(visible), [visible]);
-  const edges = useMemo(() => {
+  const visible = useMemo(() => filterByRisk(graph, showAll, minRisk), [graph, showAll, minRisk]);
+  // The computed layout is the starting point; useNodesState holds the live positions so nodes can
+  // be dragged to untangle the graph by hand. Re-sync whenever the filter recomputes the layout.
+  const computedNodes = useMemo(() => buildNodes(visible), [visible]);
+  const computedEdges = useMemo(() => {
     const visibleIds = new Set(visible.nodes.map(n => n.id));
     return buildEdges(graph, visibleIds);
   }, [graph, visible]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(computedNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
+
+  useEffect(() => setNodes(computedNodes), [computedNodes, setNodes]);
+  useEffect(() => setEdges(computedEdges), [computedEdges, setEdges]);
 
   if (graph.nodes.length === 0) {
     return null;
@@ -171,11 +193,7 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
         <FormControlLabel
           control={
-            <Switch
-              size="small"
-              checked={showAll}
-              onChange={e => setShowAll(e.target.checked)}
-            />
+            <Switch size="small" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
           }
           label={<Typography variant="body2">Show all</Typography>}
         />
@@ -200,8 +218,9 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
         </Typography>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-        Nodes colored by risk severity (None→Critical); gray dashed nodes are
-        healthy direct neighbors shown for context; edges labeled by dependency type.
+        Failing workloads on the left, add-ons on the right; each node shows its risk value (0–100)
+        and severity, colored None→Critical; gray dashed nodes are healthy direct neighbors shown
+        for context; edges labeled by dependency type. Drag any node to untangle the layout.
       </Typography>
       <Box sx={{ height: 520, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
         <ReactFlow
@@ -209,6 +228,8 @@ export function DependencyGraph({ graph }: { graph: ReportGraph }) {
           key={`${showAll}-${minRisk}`}
           nodes={nodes}
           edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           colorMode={theme.palette.mode}
           fitView
           minZoom={0.1}

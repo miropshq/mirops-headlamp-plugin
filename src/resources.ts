@@ -17,6 +17,7 @@ export interface UpgradeAnalysisSpec {
     enabled: boolean;
     provider?: 'anthropic' | 'openai';
     model?: string;
+    maxTokens?: number;
     credentialsSecret?: string;
     remediation?: {
       enabled: boolean;
@@ -81,6 +82,65 @@ export class UpgradeAnalysis extends KubeObject<UpgradeAnalysisType> {
 
   static get detailsRoute() {
     return '/mirops/upgrade-analyses/:name';
+  }
+}
+
+// ─── ClusterMirror ────────────────────────────────────────────────────────────
+
+export interface ClusterMirrorSpec {
+  scope?: {
+    mode: 'all' | 'application';
+    excludeNamespaces?: string[];
+  };
+  refresh?: {
+    mode?: 'interval';
+    // Go duration as serialized by the API, e.g. "5m0s".
+    interval?: string;
+  };
+  // Where the operator writes the mirror report — same shape as an UpgradeAnalysis source.
+  source?: {
+    type: 'file' | 's3' | 'blob' | 'pvc';
+    [key: string]: string | undefined;
+  };
+}
+
+export interface ClusterMirrorStatus {
+  components?: number;
+  edges?: number;
+  atRisk?: number;
+  lastSync?: string;
+  byNamespace?: { namespace: string; maxRisk: number; atRisk: number }[];
+  // Set when the last rebuild (or writing its report) failed.
+  syncError?: string;
+  // Report write outcome, like an UpgradeAnalysis's.
+  reportLocation?: string;
+  reportState?: 'written' | 'failed';
+  reportError?: string;
+  observedGeneration?: number;
+}
+
+export interface ClusterMirrorType extends KubeObjectInterface {
+  spec: ClusterMirrorSpec;
+  status?: ClusterMirrorStatus;
+}
+
+export class ClusterMirror extends KubeObject<ClusterMirrorType> {
+  static kind = 'ClusterMirror';
+  static apiName = 'clustermirrors';
+  static apiVersion = `${GROUP}/${VERSION}`;
+  // Cluster-scoped: mirrors the whole cluster, has no namespace.
+  static isNamespaced = false;
+
+  get spec(): ClusterMirrorSpec {
+    return this.jsonData.spec;
+  }
+
+  get status(): ClusterMirrorStatus | undefined {
+    return this.jsonData.status;
+  }
+
+  static get detailsRoute() {
+    return '/mirops/mirror/:name';
   }
 }
 

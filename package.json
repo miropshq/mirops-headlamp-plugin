@@ -1,6 +1,6 @@
 {
   "name": "mirops",
-  "description": "Headlamp plugin for the mirops Kubernetes operator",
+  "description": "Headlamp plugin for the mirops Kubernetes operator: the live Cluster Mirror and upgrade analyses",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
