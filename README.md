@@ -1,4 +1,6 @@
-# Mirops Headlamp plugin
+# Mirops for Headlamp
+
+Explore live ClusterMirror state and review Kubernetes upgrade analyses where cluster operators already work. The Headlamp plugin presents current namespace risk, analysis decisions, readiness details, compatibility findings, and dependency graphs. It also surfaces the underlying cluster-scoped `ClusterMirror`, `UpgradeAnalysis`, and `RemediationPlan` resources through Kubernetes.
 
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/mirops)](https://artifacthub.io/packages/headlamp/mirops/mirops)
 
@@ -33,6 +35,8 @@ The plugin adds a **Mirops** sidebar section with two pages:
   namespaces, and report destination (file, S3, Azure Blob, PVC). It shows the report file the name
   produces (`<name>.mirops`). With no mirror yet, the page offers it next to the YAML for `kubectl`.
 
+![Cluster Mirror and Upgrade Analyses pages provide current-state and target-version views](docs/images/readme-plugin-pages.svg)
+
 ### Upgrade Analyses
 
 - **Only what the upgrade adds** — the cluster's current state (workloads, problems, namespace risk,
@@ -54,6 +58,8 @@ The plugin adds a **Mirops** sidebar section with two pages:
 - **Remediation plans** — review, approve, and selectively execute operator-proposed actions.
 - **Create & configure** — author an `UpgradeAnalysis` from the UI: target version, scope, report
   destination, and AI settings — provider, model, **max tokens**, and remediation risk level.
+
+![Remediation proposals move through explicit review and approval before selected actions execute](docs/images/readme-remediation-flow.svg)
 
 ---
 
@@ -84,6 +90,8 @@ namespace). The operator creates none of them for you except RemediationPlans.
 Both reports come from the operator's in-cluster reports service (`mirops-reports`), which reads remote
 destinations (S3 / Azure Blob / PVC) back with the operator's own credentials. The plugin reaches it
 through the Kubernetes API server's service proxy, so the browser never needs storage credentials.
+
+![Report path from configured storage through the operator service and Kubernetes API proxy to Headlamp](docs/images/readme-report-proxy.svg)
 
 ### Operator versions
 
@@ -184,6 +192,8 @@ The decision is **condition-driven**, not score-driven:
   (`0 None · 1–39 Low · 40–69 Medium · 70–89 High · 90–100 Critical`).
 
 Risk is a different axis from `decision.level`: a node can be High risk while the decision is SAFE.
+
+![Readiness score, risk severity, and deterministic upgrade decision are separate signals](docs/images/readme-decision-model.svg)
 
 ---
 
