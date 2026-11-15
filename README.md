@@ -33,7 +33,7 @@ The plugin adds a **Mirops** sidebar section with two pages:
   components, at-risk count, where its report is written, and the last rebuild. A name opens it.
 - **New mirror** — a form to create a ClusterMirror: name, refresh interval, scope, excluded
   namespaces, and report destination (file, S3, Azure Blob, PVC). It shows the report file the name
-  produces (`<name>.mirops`). With no mirror yet, the page offers it next to the YAML for `kubectl`.
+  produces (`<name>.mirops`). With no mirror yet, the list is empty and points to **New mirror**.
 
 ![Cluster Mirror and Upgrade Analyses pages provide current-state and target-version views](docs/images/readme-plugin-pages.svg)
 
@@ -97,6 +97,8 @@ through the Kubernetes API server's service proxy, so the browser never needs st
 
 | Plugin | Operator | Notes |
 | --- | --- | --- |
+| `0.3.2` | `0.2.0` | The mirror list shows even when it's empty. |
+| `0.3.1` | `0.2.0` | **New mirror** form. Reads the `<name>.mirops` mirror report of operator 0.2.1, and falls back to `<name>.mirror` on 0.2.0. |
 | `0.3.0` | `0.2.0` | Cluster Mirror page. With an older operator the Cluster Mirror page says it needs 0.2.0, and Upgrade Analyses keeps working. |
 | `0.2.0` | `0.1.0` | Score breakdown as status bars. |
 | `0.1.0` | `0.1.0` | Initial release. |
@@ -139,7 +141,7 @@ The plugin is published on [Artifact Hub](https://artifacthub.io/packages/headla
       plugins:
         - name: mirops
           source: https://artifacthub.io/packages/headlamp/mirops/mirops
-          version: 0.3.0
+          version: 0.3.2
   ```
 
 Installed from Artifact Hub, the plugin has no `config.json`, so it reads the reports from the `mirops` namespace. If the operator runs elsewhere, use the image install above and set `MIROPS_NAMESPACE`.
